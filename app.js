@@ -308,7 +308,7 @@ const state = { list: [], label: '', updated: 0, error: null, selected: null, tr
 let pollTimer;
 async function poll(now) {
   clearTimeout(pollTimer);
-  if (document.hidden && !cfg.kiosk) return;
+  if (document.hidden && !cfg.kiosk && !now) return; // background tabs pause between refreshes
   if (!here && cfg.demo) here = { lat: cfg.lat ?? 30.6, lon: cfg.lon ?? -97.2, fixed: true }; // demo needs a centre
   if (here) {
     try {
