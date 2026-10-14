@@ -89,6 +89,7 @@ body[data-sky="dusk"] .clouds span{background:radial-gradient(ellipse,rgba(255,2
 @keyframes drift{from{transform:translateX(0)}to{transform:translateX(160vw)}}
 
 /* the card */
+#stage{display:flex;flex-direction:column;gap:14px}
 .card{position:relative;background:var(--glass);border:1px solid var(--glass-line);border-radius:26px;padding:20px 20px 18px;display:flex;flex-direction:column;gap:16px;-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:0 18px 40px rgba(5,10,30,.22);cursor:pointer;overflow:hidden}
 .card:not(.empty):hover{background:rgba(255,255,255,.17)}
 .head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center}

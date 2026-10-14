@@ -645,10 +645,12 @@ function render() {
   paintSky();
   if (!state.list.some(a => a.hex === state.selected)) state.selected = state.list[0]?.hex || null;
   const a = state.list.find(x => x.hex === state.selected);
-  $('tabs').innerHTML = tabsHTML();
-  $('tabs').hidden = state.list.length < 2;
+  // Phone: every aircraft in range as a stack of cards, nearest first.
+  // Patio display: one big card at a time, cycling, with the faint tabs above.
+  $('tabs').innerHTML = cfg.kiosk ? tabsHTML() : '';
+  $('tabs').hidden = !cfg.kiosk || state.list.length < 2;
   $('tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  $('stage').innerHTML = a ? cardHTML(a) : emptyHTML();
+  $('stage').innerHTML = !state.list.length ? emptyHTML() : cfg.kiosk ? cardHTML(a) : state.list.map(cardHTML).join('');
   $('where').textContent = here ? `Within ${fmtDist(cfg.radiusMi).replace('.0 ', ' ')} of ${here.fixed ? 'your spot' : 'you'}` : 'Overhead';
   statusLine();
   if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen); if (d) $('sheetInner').innerHTML = detailHTML(d); }
