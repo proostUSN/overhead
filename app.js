@@ -353,6 +353,48 @@ async function poll(now) {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(true); });
 
 
+/* ---------- airports: infer departures and arrivals ---------- */
+// Major airports (OurAirports, public domain): [iata, lat, lon, city]. Loaded once, cached by the service worker.
+let AIRPORTS = [];
+fetch('airports.json').then(r => r.ok ? r.json() : []).then(list => { AIRPORTS = list.map(([code, lat, lon, city]) => ({ code, lat, lon, city })); scheduleRender(); }).catch(() => {});
+
+// The airport a climbing aircraft just left (behind it), or a descending one is heading for (ahead of it).
+function airportFor(a, mode) {
+  if (!AIRPORTS.length || a.alt == null) return null;
+  const maxMi = Math.min(60, Math.max(12, 10 + a.alt / 300));   // ~300 ft per mile on a normal climb or descent
+  let best = null, bestScore = Infinity;
+  for (const ap of AIRPORTS) {
+    if (Math.abs(ap.lat - a.lat) > 1.2) continue;
+    const d = distMi(ap.lat, ap.lon, a.lat, a.lon);
+    if (d > maxMi) continue;
+    let diff = 0;
+    if (a.track != null && d > 3) {
+      const b = mode === 'from' ? bearing(ap.lat, ap.lon, a.lat, a.lon) : bearing(a.lat, a.lon, ap.lat, ap.lon);
+      diff = Math.abs(((b - a.track) + 540) % 360 - 180);
+      if (diff > 100) continue;
+    }
+    const score = d + diff * 0.4;
+    if (score < bestScore) { bestScore = score; best = ap; }
+  }
+  return best;
+}
+// Fill in the leg from what the aircraft is doing: climbing out = departed the airport behind it,
+// descending = arriving at the airport ahead. Uses the database's other stops for the far end when they fit.
+function inferLeg(a, r) {
+  if (a.ground || a.alt == null || a.alt > 18000 || a.vrate == null || Math.abs(a.vrate) < 400) return null;
+  const mode = a.vrate > 0 ? 'from' : 'to';
+  const ap = airportFor(a, mode);
+  if (!ap) return null;
+  const stops = (r?.stops || (r?.from ? [r.from, r.to] : [])).filter(x => x && x.lat != null && x.code !== ap.code);
+  let other = null, bestDiff = 60;
+  for (const st of stops) {
+    const b = mode === 'from' ? bearing(ap.lat, ap.lon, st.lat, st.lon) : bearing(st.lat, st.lon, ap.lat, ap.lon);
+    const diff = a.track == null ? 0 : Math.abs(((b - a.track) + 540) % 360 - 180);
+    if (diff < bestDiff) { bestDiff = diff; other = st; }
+  }
+  return mode === 'from' ? { from: ap, to: other, mode } : { from: other, to: ap, mode };
+}
+
 /* ---------- sky: colour, sun, moon, stars and clouds follow the real sky at your location ---------- */
 function horizontal(ra, dec, lat, lon, d) {
   const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
@@ -516,8 +558,19 @@ function routePlausible(r, a) {
   return true;
 }
 function progressHTML(a) {
-  const r = routeOf(a);
+  const r = a._leg || routeOf(a);
   const fa = a.callsign ? `<a class="falink" href="https://www.flightaware.com/live/flight/${encodeURIComponent(a.callsign)}" target="_blank" rel="noopener">See route on FlightAware ›</a>` : '';
+  const bad = !a._leg && (!r || !r.from || !r.to || routePlausible(r, a) === false);
+  if (bad) {
+    const inf = inferLeg(a, r);
+    if (inf && inf.from && inf.to) return progressHTML({ ...a, _leg: inf });               // e.g. IAH → LAX
+    if (inf) {
+      const ap = inf.mode === 'from' ? inf.from : inf.to;
+      const verb = inf.mode === 'from' ? 'Departed' : 'Arriving at';
+      return `<div class="route"><div class="ends"><div class="ap"><b>${esc(ap.code)}</b><span>${verb} ${esc(ap.city || '')}</span></div></div>
+        <div class="sub"><span class="phase ${phase(a)}">${PHASE_LABEL[phase(a)]}</span><span>${inf.mode === 'from' ? 'Destination not published' : 'Origin not published'}</span></div></div>${fa}`;
+    }
+  }
   if (r && r.from && r.to && routePlausible(r, a) === false) {
     return `<div class="noroute">Route uncertain: listed as ${esc(r.from.code)} → ${esc(r.to.code)}, which doesn't match where this flight is.</div>${fa}`;
   }
