@@ -511,12 +511,13 @@ function routePlausible(r, a) {
 }
 function progressHTML(a) {
   const r = routeOf(a);
+  const fa = a.callsign ? `<a class="falink" href="https://www.flightaware.com/live/flight/${encodeURIComponent(a.callsign)}" target="_blank" rel="noopener">See route on FlightAware ›</a>` : '';
   if (r && r.from && r.to && routePlausible(r, a) === false) {
-    return `<div class="noroute">Route uncertain: listed as ${esc(r.from.code)} → ${esc(r.to.code)}, which doesn't match where this flight is.</div>`;
+    return `<div class="noroute">Route uncertain: listed as ${esc(r.from.code)} → ${esc(r.to.code)}, which doesn't match where this flight is.</div>${fa}`;
   }
   if (!r || !r.from || !r.to) {
     const note = a.ground ? 'On the ground nearby' : isAirline(a) ? 'Route not published for this flight' : 'Private flight · no published route';
-    return `<div class="noroute">${note}</div>`;
+    return `<div class="noroute">${note}</div>${a.ground ? '' : fa}`;
   }
   let pct = null, flown = null, togo = null;
   if (r.from.lat != null && r.to.lat != null) {
@@ -680,6 +681,7 @@ function closeDetail() {
   $('sheet').classList.remove('open'); $('scrim').classList.remove('open'); $('sheet').setAttribute('aria-hidden', 'true');
 }
 document.addEventListener('click', ev => {
+  if (ev.target.closest('a[href]')) return;                     // links (e.g. FlightAware) just open
   const tab = ev.target.closest('[data-tab]');
   if (tab) { state.selected = tab.dataset.tab; userPicked = Date.now(); render(); return; }
   const act = ev.target.closest('[data-act]')?.dataset.act;

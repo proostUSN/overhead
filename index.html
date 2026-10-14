@@ -138,6 +138,8 @@ body[data-sky="dusk"] .clouds span{background:radial-gradient(ellipse,rgba(255,2
 .phase::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
 .phase.climb{--c:var(--climb)} .phase.cruise{--c:var(--cruise)} .phase.descend{--c:var(--descend)} .phase.ground{--c:var(--ground)}
 .noroute{font-size:.9rem;color:var(--ink-2);padding:4px 0}
+.falink{align-self:flex-start;color:#fff;font-size:.88rem;font-weight:600;text-decoration:none;background:rgba(255,255,255,.14);border:1px solid var(--glass-line);padding:7px 14px;border-radius:999px;margin-top:-6px}
+.falink:hover{background:rgba(255,255,255,.22)}
 
 /* empty state */
 .card.empty{cursor:default;align-items:flex-start;gap:6px;padding:26px 22px 24px;min-height:260px;justify-content:flex-end}
@@ -161,6 +163,7 @@ body[data-sky="dusk"] .clouds span{background:radial-gradient(ellipse,rgba(255,2
 .scrim.open{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--sheet);border-radius:22px 22px 0 0;max-height:90vh;overflow:auto;padding:0 var(--gutter-r) calc(20px + env(safe-area-inset-bottom,0px)) var(--gutter-l);transform:translateY(102%);transition:transform .28s ease}
 .sheet.open{transform:none}
+.sheet:not(.open){visibility:hidden;transition:transform .28s ease,visibility 0s .28s}
 .sheet .inner{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:10px}
 .grab{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin:0 auto}
 .dtop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
