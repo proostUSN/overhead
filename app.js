@@ -164,7 +164,7 @@ async function getTraffic(lat, lon) {
 }
 
 /* ---------- enrichment: routes, aircraft records, photos ---------- */
-const CACHE_KEY = 'overhead.cache.v2'; // bumped: drop routes cached from the older source
+const CACHE_KEY = 'overhead.cache.v3'; // bumped: drop routes cached from the older source
 const enrich = { route: new Map(), ac: new Map(), photo: new Map(), airline: new Map(), pending: new Set(), queue: [] };
 (function loadCache() {
   const c = store(CACHE_KEY); if (!c) return;
@@ -193,7 +193,7 @@ async function lookupRoute(a) {
     const aps = j?._airports;
     if (aps && aps.length >= 2 && j.plausible !== false && j.plausible !== 0) {
       const ap = p => ({ code: p.iata || p.icao, icao: p.icao, name: p.name, city: p.location, lat: p.lat, lon: p.lon });
-      return { from: ap(aps[0]), to: ap(aps[aps.length - 1]), airline: '', airlineIcao: j.airline_code || '', via: 'adsb.lol' };
+      return { stops: aps.map(ap), airline: '', airlineIcao: j.airline_code || '', via: 'adsb.lol' };
     }
   } catch (e) { if (e.status && e.status !== 404) throw e; }
   // 2) adsbdb callsign database
@@ -202,7 +202,8 @@ async function lookupRoute(a) {
     const fr = j?.response?.flightroute;
     if (fr && fr.origin && fr.destination) {
       const ap = p => ({ code: p.iata_code || p.icao_code, icao: p.icao_code, name: p.name, city: p.municipality, lat: p.latitude, lon: p.longitude });
-      return { from: ap(fr.origin), to: ap(fr.destination), airline: fr.airline?.name || '', airlineIata: fr.airline?.iata || '', airlineIcao: fr.airline?.icao || '', flightNo: fr.callsign_iata || '', via: 'adsbdb' };
+      const stops = [fr.origin, fr.midpoint, fr.destination].filter(Boolean).map(ap);
+      return { stops, airline: fr.airline?.name || '', airlineIata: fr.airline?.iata || '', airlineIcao: fr.airline?.icao || '', flightNo: fr.callsign_iata || '', via: 'adsbdb' };
     }
   } catch (e) { if (e.status && e.status !== 404) throw e; }
   return null;
@@ -419,7 +420,34 @@ const HELI_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v1
 const planeSVG = (rot = 0) => `<svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${rot}deg)"><path d="${PLANE_PATH}"/></svg>`;
 const ARROW = b => `<svg class="brg" viewBox="0 0 24 24" style="transform:rotate(${Math.round(b)}deg)" aria-hidden="true"><path d="M12 2l6 18-6-4-6 4z"/></svg>`;
 
-const routeOf = a => a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
+// A flight number can cover several legs (e.g. SLC → IAH → SLC). Pick the leg this aircraft is
+// actually flying: the one whose path it sits on and whose destination it's heading toward.
+function pickLeg(stops, a) {
+  if (stops.length < 3) return [stops[0], stops[stops.length - 1]];
+  let best = null, bestScore = Infinity;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const f = stops[i], t = stops[i + 1];
+    if (f.lat == null || t.lat == null) continue;
+    const dF = distMi(f.lat, f.lon, a.lat, a.lon), dT = distMi(a.lat, a.lon, t.lat, t.lon);
+    let score = dF + dT - distMi(f.lat, f.lon, t.lat, t.lon);          // miles off the direct path
+    if (a.track != null && dT > 5) {                                      // pointing away from this destination?
+      const diff = Math.abs(((bearing(a.lat, a.lon, t.lat, t.lon) - a.track) + 540) % 360 - 180);
+      score += diff * 2;
+    }
+    if (a.vrate != null) {                                                // near an airport: climbing = leaving it
+      if (dT < 40 && a.vrate > 300) score += 500;                         // climbing near this leg's destination
+      if (dF < 40 && a.vrate < -300) score += 500;                        // descending near this leg's origin
+    }
+    if (score < bestScore) { bestScore = score; best = [f, t]; }
+  }
+  return best || [stops[0], stops[1]];
+}
+function routeOf(a) {
+  const r = a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
+  if (!r || !r.stops) return r;
+  const [from, to] = pickLeg(r.stops, a);
+  return { ...r, from, to };
+}
 const airlineIcaoOf = a => routeOf(a)?.airlineIcao || (/^[A-Z]{3}\d/.test(a.callsign) ? a.callsign.slice(0, 3) : '');
 const airlineOf = a => { const i = airlineIcaoOf(a); return i ? enrich.airline.get(i) : null; };
 const isAirline = a => !!(routeOf(a)?.airline || /^[A-Z]{3}\d/.test(a.callsign));
