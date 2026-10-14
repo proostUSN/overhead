@@ -639,7 +639,9 @@ function detailHTML(a) {
 
 /* ---------- render ---------- */
 let rq;
-function scheduleRender() { if (!rq) rq = requestAnimationFrame(() => { rq = null; render(); }); }
+// A plain timer, not requestAnimationFrame: animation frames pause while the page isn't on screen,
+// which left cards without routes after lookups finished in the background.
+function scheduleRender() { if (!rq) rq = setTimeout(() => { rq = null; render(); }, 60); }
 function render() {
   document.body.classList.toggle('kiosk', !!cfg.kiosk);
   document.documentElement.classList.toggle('kiosk', !!cfg.kiosk);
