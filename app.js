@@ -657,7 +657,7 @@ document.addEventListener('click', ev => {
   if (act === 'settings') return openSettings();
   if (act === 'retry') return poll(true);
   if (act === 'retryLoc') { startLocation(); render(); return; }
-  if (act === 'demo') { cfg.demo = true; store(LS_KEY, cfg); poll(true); return; }
+  if (act === 'demo') { cfg.demo = true; poll(true); return; } // demo from a button lasts until the app is reopened
   const card = ev.target.closest('[data-open]');
   if (card && !cfg.kiosk) openDetail(card.dataset.open);
 });
