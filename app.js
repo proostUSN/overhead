@@ -7,7 +7,7 @@
 const DEFAULTS = {
   source: 'auto',            // auto | airplaneslive | adsblol | adsbfi | local
   localUrl: '/tar1090/data/aircraft.json',
-  relay: '',                 // Cloudflare Worker URL that adds CORS to the free feeds (see relay/worker.js)
+  relay: '',                 // relay that lets the page read the free feeds (nas/ for a home server)
   radiusMi: 5,
   refreshSec: 10,
   locMode: 'gps',            // gps | fixed
@@ -21,7 +21,10 @@ const LS_KEY = 'overhead.settings.v1';
 
 function store(key, val) { try { if (val === undefined) return JSON.parse(localStorage.getItem(key) || 'null'); localStorage.setItem(key, JSON.stringify(val)); } catch { return null; } }
 
+// The shared home relay (Synology + Tailscale Funnel). Everyone who opens the app uses it unless they set their own.
+const DEFAULT_RELAY = 'https://overhead-relay.tail71c8a7.ts.net';
 const cfg = Object.assign({}, DEFAULTS, store(LS_KEY) || {});
+if (!cfg.relay) cfg.relay = DEFAULT_RELAY;
 // URL parameters override saved settings (handy for the Pi kiosk command line).
 const qp = new URLSearchParams(location.search);
 const num = v => (v === null || v === '' || isNaN(+v)) ? null : +v;
@@ -110,7 +113,7 @@ const SOURCES = {
   adsbfi:        { label: 'adsb.fi',        url: (lat, lon, mi) => viaRelay(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(2)}/lon/${lon.toFixed(2)}/dist/${nmFor(mi)}`) },
   local:         { label: 'your receiver',  url: () => cfg.localUrl },
 };
-const AUTO_ORDER = ['airplaneslive', 'adsblol', 'adsbfi'];
+const AUTO_ORDER = ['adsblol', 'adsbfi', 'airplaneslive']; // airplanes.live currently refuses relays
 let autoIdx = 0;
 
 async function fetchJSON(url, opts = {}, timeoutMs = 9000) {
@@ -652,7 +655,7 @@ function syncSettingsVis() {
   $('s-refreshVal').textContent = `${$('s-refresh').value} s`;
 }
 function openSettings() {
-  $('s-source').value = cfg.source; $('s-localUrl').value = cfg.localUrl; $('s-relay').value = cfg.relay || '';
+  $('s-source').value = cfg.source; $('s-localUrl').value = cfg.localUrl; $('s-relay').value = cfg.relay === DEFAULT_RELAY ? '' : (cfg.relay || '');
   $('s-radius').value = cfg.radiusMi; $('s-refresh').value = cfg.refreshSec;
   $('s-loc').value = cfg.locMode; $('s-lat').value = cfg.lat ?? ''; $('s-lon').value = cfg.lon ?? '';
   $('s-units').value = cfg.units; $('s-ground').checked = cfg.showGround; $('s-kiosk').checked = cfg.kiosk; $('s-demo').checked = cfg.demo;
@@ -674,7 +677,7 @@ $('s-here').addEventListener('click', () => {
 $('settingsForm').addEventListener('submit', e => {
   e.preventDefault();
   const prevLoc = [cfg.locMode, cfg.lat, cfg.lon].join();
-  cfg.source = $('s-source').value; cfg.localUrl = $('s-localUrl').value.trim() || DEFAULTS.localUrl; cfg.relay = $('s-relay').value.trim();
+  cfg.source = $('s-source').value; cfg.localUrl = $('s-localUrl').value.trim() || DEFAULTS.localUrl; cfg.relay = $('s-relay').value.trim() || DEFAULT_RELAY;
   cfg.radiusMi = +$('s-radius').value; cfg.refreshSec = +$('s-refresh').value;
   cfg.locMode = $('s-loc').value; cfg.lat = num($('s-lat').value); cfg.lon = num($('s-lon').value);
   cfg.units = $('s-units').value; cfg.showGround = $('s-ground').checked; cfg.kiosk = $('s-kiosk').checked; cfg.demo = $('s-demo').checked;

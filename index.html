@@ -245,8 +245,8 @@ body.kiosk .gear{opacity:.2}
     </div>
     <div class="field" id="f-relay">
       <label for="s-relay">Relay address</label>
-      <input type="url" id="s-relay" placeholder="https://overhead-relay.yourname.workers.dev" autocomplete="off">
-      <span class="note">Your Cloudflare Worker (relay/worker.js). Needed for live positions.</span>
+      <input type="url" id="s-relay" placeholder="Shared relay (default)" autocomplete="off">
+      <span class="note">Leave empty to use the shared relay. Set your own if you run one (see nas/ in the project).</span>
     </div>
     <div class="field" id="f-local">
       <label for="s-localUrl">Receiver aircraft.json URL</label>

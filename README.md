@@ -4,21 +4,15 @@ A flight tracker for your phone: every aircraft within a few miles of you, with 
 
 **Open it:** https://proostusn.github.io/overhead/
 
-## One-time setup: the relay (5 minutes, free)
+## How live data reaches the app
 
-The free ADS-B networks don't allow web pages on other sites to read their data directly (no CORS headers), so live positions go through a tiny relay you own. Routes and photos don't need it.
+The free ADS-B networks don't let web pages on other sites read their data (no CORS headers), and they refuse requests from cloud servers such as Cloudflare Workers. So the app reads them through a small relay running at home, on a Synology NAS, reached securely through Tailscale Funnel. Its address is built into the app, so there's nothing to set up on phones.
 
-1. Sign up at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up) (free plan; no card needed).
-2. Go to **Workers & Pages → Create → Create Worker**. Name it `overhead-relay`, click **Deploy**.
-3. Click **Edit code**, delete the sample, paste the contents of [`relay/worker.js`](relay/worker.js), click **Deploy**.
-4. Copy the Worker's address, e.g. `https://overhead-relay.yourname.workers.dev`.
-5. In Overhead, open Settings (gear) → **Relay address**, paste it, Save.
+- Relay code: [`nas/server.mjs`](nas/server.mjs). It forwards only to adsb.lol, adsb.fi and airplanes.live, only for this app's page, caches answers for 5 seconds, and rate-limits each visitor.
+- Setup: [`nas/docker-compose.yml`](nas/docker-compose.yml), pasted into Synology Container Manager. No router ports are opened, and the relay isn't reachable on the home network. Both containers run without privileges; the relay code is pinned to a commit and checked against a SHA-256 checksum.
+- To run your own relay, deploy the same compose file with your own Tailscale key and put its address in Settings → Relay address.
 
-The relay only forwards to airplanes.live, adsb.lol and adsb.fi, only answers this app's page (plus home-network addresses for the Pi), and caches each answer for 5 seconds. The free Workers plan allows 100,000 requests a day; one phone refreshing every 10 seconds uses about 360 an hour.
-
-To skip typing it on each device, open the app once as `https://proostusn.github.io/overhead/?relay=https://overhead-relay.yourname.workers.dev` and it's saved.
-
-With your own receiver on a Pi, the relay isn't needed: the app reads the receiver directly.
+`relay/worker.js` (Cloudflare Worker) is kept for reference; the networks currently block it.
 
 ## Install on your phone
 
