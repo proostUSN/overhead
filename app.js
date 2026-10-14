@@ -7,6 +7,7 @@
 const DEFAULTS = {
   source: 'auto',            // auto | airplaneslive | adsblol | adsbfi | local
   localUrl: '/tar1090/data/aircraft.json',
+  relay: '',                 // Cloudflare Worker URL that adds CORS to the free feeds (see relay/worker.js)
   radiusMi: 5,
   refreshSec: 10,
   locMode: 'gps',            // gps | fixed
@@ -33,6 +34,8 @@ if (qp.has('kiosk')) cfg.kiosk = qp.get('kiosk') !== '0';
 if (qp.has('demo')) cfg.demo = qp.get('demo') !== '0';
 if (qp.has('units')) cfg.units = qp.get('units') === 'metric' ? 'metric' : 'imperial';
 if (qp.has('ground')) cfg.showGround = qp.get('ground') !== '0';
+if (qp.has('relay')) cfg.relay = qp.get('relay');
+const viaRelay = url => cfg.relay ? `${cfg.relay.replace(/\/+$/, '')}/?url=${encodeURIComponent(url)}` : url;
 
 /* ---------- geometry ---------- */
 const R_MI = 3958.8, MI_PER_NM = 1.15078;
@@ -100,9 +103,9 @@ const isHeli = a => a.category === 'A7' || /^(R22|R44|R66|EC|AS|B06|B407|B412|S7
 /* ---------- data sources ---------- */
 const nmFor = mi => Math.min(250, Math.max(1, Math.ceil(mi / MI_PER_NM) + 1));
 const SOURCES = {
-  airplaneslive: { label: 'airplanes.live', url: (lat, lon, mi) => `https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${nmFor(mi)}` },
-  adsblol:       { label: 'adsb.lol',       url: (lat, lon, mi) => `https://api.adsb.lol/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${nmFor(mi)}` },
-  adsbfi:        { label: 'adsb.fi',        url: (lat, lon, mi) => `https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${nmFor(mi)}` },
+  airplaneslive: { label: 'airplanes.live', url: (lat, lon, mi) => viaRelay(`https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${nmFor(mi)}`) },
+  adsblol:       { label: 'adsb.lol',       url: (lat, lon, mi) => viaRelay(`https://api.adsb.lol/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${nmFor(mi)}`) },
+  adsbfi:        { label: 'adsb.fi',        url: (lat, lon, mi) => viaRelay(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${nmFor(mi)}`) },
   local:         { label: 'your receiver',  url: () => cfg.localUrl },
 };
 const AUTO_ORDER = ['airplaneslive', 'adsblol', 'adsbfi'];
@@ -139,6 +142,7 @@ function normalize(raw, nowSec) {
 
 async function getTraffic(lat, lon) {
   if (cfg.demo) return { list: demoTraffic(lat, lon), label: 'demo traffic' };
+  if (cfg.source !== 'local' && !cfg.relay) { const e = new Error('needs relay'); e.needsRelay = true; e.source = 'Live data'; throw e; }
   const keys = cfg.source === 'auto' ? AUTO_ORDER : [cfg.source];
   let lastErr;
   for (let i = 0; i < keys.length; i++) {
@@ -187,9 +191,9 @@ async function lookupRoute(a) {
       return { from: ap(fr.origin), to: ap(fr.destination), airline: fr.airline?.name || '', via: 'adsbdb' };
     }
   } catch (e) { if (e.status && e.status !== 404) throw e; }
-  // 2) adsb.lol route set (uses position to judge plausibility)
-  try {
-    const j = await fetchJSON('https://api.adsb.lol/api/0/routeset', {
+  // 2) adsb.lol route set (uses position to judge plausibility; needs the relay)
+  if (cfg.relay) try {
+    const j = await fetchJSON(viaRelay('https://api.adsb.lol/api/0/routeset'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ planes: [{ callsign: cs, lat: a.lat, lng: a.lon }] }),
     });
@@ -319,11 +323,11 @@ async function poll(now) {
       for (const k of state.trails.keys()) if (!seen.has(k)) state.trails.delete(k);
       const inside = list.filter(a => a.dist <= cfg.radiusMi && (cfg.showGround || !a.ground)).sort((x, y) => x.dist - y.dist);
       state.wider = list.length;
-      state.list = inside; state.label = label; state.updated = Date.now(); state.error = null;
+      state.list = inside; state.label = label; state.updated = Date.now(); state.error = null; state.needsRelay = false;
       enrichTop(inside);
     } catch (e) {
       state.error = e.name === 'AbortError' ? 'timed out' : (e.message === 'Failed to fetch' ? 'blocked or offline' : e.message);
-      state.errorSource = e.source || '';
+      state.errorSource = e.source || ''; state.needsRelay = !!e.needsRelay;
     }
   }
   render();
@@ -435,6 +439,7 @@ function statusLine() {
 
 function noticeHTML() {
   if (locError && !here) return `<div class="notice"><h3>Where are you?</h3><p>${esc(locError)}</p><div class="row"><button class="btn primary" data-act="retryLoc" type="button">Try location again</button><button class="btn" data-act="settings" type="button">Set a fixed point</button><button class="btn" data-act="demo" type="button">Show demo traffic</button></div></div>`;
+  if (state.needsRelay) return `<div class="notice"><h3>Live data needs a relay</h3><p>The free ADS-B networks don’t let web pages read them directly. Add your relay address in Settings (setup steps are in the project README), or use your own receiver. Routes and photos already work.</p><div class="row"><button class="btn primary" data-act="settings" type="button">Open Settings</button><button class="btn" data-act="demo" type="button">Show demo traffic</button></div></div>`;
   if (state.error && !state.list.length) return `<div class="notice"><h3>Can’t reach the flight data</h3><p>${cfg.source === 'local' ? `Your receiver at ${esc(cfg.localUrl)} didn’t answer (${esc(state.error)}). Check the URL in Settings.` : `The free ADS-B networks didn’t answer (${esc(state.error)}). This is usually brief; the app keeps retrying every ${cfg.refreshSec} seconds.`}</p><div class="row"><button class="btn" data-act="retry" type="button">Retry now</button><button class="btn" data-act="demo" type="button">Show demo traffic</button></div></div>`;
   if (here && state.updated && !state.list.length) return `<div class="notice"><h3>Quiet skies</h3><p>No aircraft within ${fmtDist(cfg.radiusMi)} right now${state.wider ? `; ${state.wider} more just outside` : ''}. The list fills in as soon as something comes into range.</p></div>`;
   return '';
@@ -544,12 +549,13 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.sele
 const dlg = $('settings');
 function syncSettingsVis() {
   $('f-local').hidden = $('s-source').value !== 'local';
+  $('f-relay').hidden = $('s-source').value === 'local';
   $('f-fixed').hidden = $('s-loc').value !== 'fixed';
   $('s-radiusVal').textContent = `${$('s-radius').value} mi`;
   $('s-refreshVal').textContent = `${$('s-refresh').value} s`;
 }
 function openSettings() {
-  $('s-source').value = cfg.source; $('s-localUrl').value = cfg.localUrl;
+  $('s-source').value = cfg.source; $('s-localUrl').value = cfg.localUrl; $('s-relay').value = cfg.relay || '';
   $('s-radius').value = cfg.radiusMi; $('s-refresh').value = cfg.refreshSec;
   $('s-loc').value = cfg.locMode; $('s-lat').value = cfg.lat ?? ''; $('s-lon').value = cfg.lon ?? '';
   $('s-units').value = cfg.units; $('s-ground').checked = cfg.showGround; $('s-kiosk').checked = cfg.kiosk; $('s-demo').checked = cfg.demo;
@@ -571,7 +577,7 @@ $('s-here').addEventListener('click', () => {
 $('settingsForm').addEventListener('submit', e => {
   e.preventDefault();
   const prevLoc = [cfg.locMode, cfg.lat, cfg.lon].join();
-  cfg.source = $('s-source').value; cfg.localUrl = $('s-localUrl').value.trim() || DEFAULTS.localUrl;
+  cfg.source = $('s-source').value; cfg.localUrl = $('s-localUrl').value.trim() || DEFAULTS.localUrl; cfg.relay = $('s-relay').value.trim();
   cfg.radiusMi = +$('s-radius').value; cfg.refreshSec = +$('s-refresh').value;
   cfg.locMode = $('s-loc').value; cfg.lat = num($('s-lat').value); cfg.lon = num($('s-lon').value);
   cfg.units = $('s-units').value; cfg.showGround = $('s-ground').checked; cfg.kiosk = $('s-kiosk').checked; cfg.demo = $('s-demo').checked;

@@ -1,5 +1,5 @@
 /* Overhead service worker: app shell offline, live data always from the network. */
-const VERSION = 'overhead-v1';
+const VERSION = 'overhead-v2';
 const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 const PHOTOS = 'overhead-photos';
 const FONTS = 'overhead-fonts';

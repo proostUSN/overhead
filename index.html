@@ -235,6 +235,11 @@ body.kiosk .scrim,body.kiosk .sheet{display:none}
       <input type="url" id="s-localUrl" placeholder="/tar1090/data/aircraft.json">
       <span class="hint">On the Pi this is usually /tar1090/data/aircraft.json or http://localhost:8080/data/aircraft.json.</span>
     </div>
+    <div class="field" id="f-relay">
+      <label for="s-relay">Relay address</label>
+      <input type="url" id="s-relay" placeholder="https://overhead-relay.yourname.workers.dev" autocomplete="off">
+      <span class="hint">Your Cloudflare Worker from relay/worker.js. Needed for live positions from the free networks.</span>
+    </div>
     <div class="field">
       <span class="lbl">Radius <span class="rangeval" id="s-radiusVal"></span></span>
       <input type="range" id="s-radius" min="1" max="25" step="0.5" aria-label="Radius in miles">

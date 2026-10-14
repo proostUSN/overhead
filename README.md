@@ -4,6 +4,22 @@ A flight tracker for your phone: every aircraft within a few miles of you, with 
 
 **Open it:** https://proostusn.github.io/overhead/
 
+## One-time setup: the relay (5 minutes, free)
+
+The free ADS-B networks don't allow web pages on other sites to read their data directly (no CORS headers), so live positions go through a tiny relay you own. Routes and photos don't need it.
+
+1. Sign up at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up) (free plan; no card needed).
+2. Go to **Workers & Pages → Create → Create Worker**. Name it `overhead-relay`, click **Deploy**.
+3. Click **Edit code**, delete the sample, paste the contents of [`relay/worker.js`](relay/worker.js), click **Deploy**.
+4. Copy the Worker's address, e.g. `https://overhead-relay.yourname.workers.dev`.
+5. In Overhead, open Settings (gear) → **Relay address**, paste it, Save.
+
+The relay only forwards to airplanes.live, adsb.lol and adsb.fi, only answers this app's page (plus home-network addresses for the Pi), and caches each answer for 5 seconds. The free Workers plan allows 100,000 requests a day; one phone refreshing every 10 seconds uses about 360 an hour.
+
+To skip typing it on each device, open the app once as `https://proostusn.github.io/overhead/?relay=https://overhead-relay.yourname.workers.dev` and it's saved.
+
+With your own receiver on a Pi, the relay isn't needed: the app reads the receiver directly.
+
 ## Install on your phone
 
 - **iPhone (Safari):** open the link, tap Share, then **Add to Home Screen**.
@@ -31,7 +47,7 @@ Altitudes at or above 18,000 ft show as flight levels (FL340 = 34,000 ft). Squaw
 | Demo traffic | Simulated aircraft, for checking the app when nothing is flying. |
 
 Everything can also be set with URL parameters, which the Pi uses:
-`?kiosk=1&lat=30.1&lon=-95.4&radius=5&refresh=10&source=local&url=/tar1090/data/aircraft.json&units=metric&ground=1&demo=1`
+`?relay=https://…workers.dev&kiosk=1&lat=30.1&lon=-95.4&radius=5&refresh=10&source=local&url=/tar1090/data/aircraft.json&units=metric&ground=1&demo=1`
 
 ## Where the data comes from
 
@@ -44,7 +60,7 @@ Everything can also be set with URL parameters, which the Pi uses:
 
 Your location stays on your device except for the latitude and longitude sent in each ADS-B query. Lookups are cached on the device (routes 6 h, aircraft and photos 7 days).
 
-If one network blocks browser requests or is down, **Automatic** moves to the next one. Running your own receiver (below) removes the dependency on all three for positions.
+If one network is down, **Automatic** moves to the next one. Running your own receiver (below) removes the dependency on all three for positions.
 
 ## Raspberry Pi patio display
 
@@ -105,5 +121,6 @@ cd ~/overhead && git pull
 | `sw.js` | Service worker: app works offline as a shell, caches photos |
 | `manifest.webmanifest`, `icons/` | Home-screen install |
 | `pi/kiosk.sh` | Full-screen launcher for the Pi |
+| `relay/worker.js` | Cloudflare Worker that adds CORS to the free feeds |
 
 No build step. To run locally: `python3 -m http.server 8000`, then open http://localhost:8000/?demo=1
