@@ -39,7 +39,7 @@ One card, like a weather widget, for the nearest aircraft within 5 miles:
 
 When more than one aircraft is in range, a faint row of tabs across the top lets you switch between them. Tap the card for details: photo, full airport names, squawk, Mode S code, and links to the live map and FlightAware.
 
-The background follows the sun at your location: blue by day, warm at dawn and dusk, dark at night. With nothing in range, the card shows the time and the last aircraft seen.
+The background follows the real sky at your location: blue with drifting clouds by day, warm at dawn and dusk, stars at night, with the sun and moon (at its current phase) placed where they actually are, facing south. With nothing in range, the card shows the time and the last aircraft seen.
 
 Airline logos load from public logo services (images.kiwi.com, FlightAware) by airline code. Logos are trademarks of their airlines; when one isn't available the card shows the airline's code instead.
 
@@ -66,7 +66,7 @@ Everything can also be set with URL parameters, which the Pi uses:
 | Aircraft records | adsbdb | Registration, type and owner when the live feed lacks them. |
 | Photos | [Planespotters.net](https://www.planespotters.net/photo/api) | Photographer credited under each photo, linked to the original as their terms require. |
 
-Your location stays on your device except for the latitude and longitude sent in each ADS-B query. Lookups are cached on the device (routes 6 h, aircraft and photos 7 days).
+Your exact location never leaves your device. Flight-data queries (and the relay) only see a point rounded to 0.01° (under a mile), and the app works out exact distances on the phone. Lookups are cached on the device (routes 6 h, aircraft and photos 7 days).
 
 If one network is down, **Automatic** moves to the next one. Running your own receiver (below) removes the dependency on all three for positions.
 

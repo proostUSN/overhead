@@ -55,6 +55,38 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tab:hover{color:var(--ink-2)}
 .tab.on{color:var(--ink);background:rgba(255,255,255,.12)}
 
+
+/* sky layers */
+#sky{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;--stars:0}
+.app,.scrim,.sheet{position:relative;z-index:1}
+.scrim,.sheet{position:fixed}
+.scrim{z-index:19}.sheet{z-index:20}
+.stars{position:absolute;inset:0;opacity:var(--stars);transition:opacity 2s}
+.stars i{position:absolute;border-radius:50%;background:#fff;animation:twinkle 6s ease-in-out infinite}
+@keyframes twinkle{0%,100%{transform:scale(1)}50%{transform:scale(.55);filter:brightness(.6)}}
+.sun{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;
+  background:radial-gradient(circle,#fffbe8 0 18%,rgba(255,236,170,.85) 26%,rgba(255,214,120,.35) 45%,rgba(255,200,100,0) 70%);transition:opacity 2s}
+body[data-sky="dusk"] .sun{background:radial-gradient(circle,#fff1d6 0 16%,rgba(255,180,110,.85) 26%,rgba(255,140,90,.4) 46%,rgba(255,120,80,0) 72%);width:170px;height:170px;margin:-85px 0 0 -85px}
+.moon{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;overflow:hidden;
+  background:radial-gradient(circle at 38% 35%,#fbfbf4,#d9dccf 70%);box-shadow:0 0 28px 6px rgba(220,230,255,.28);transition:opacity 2s}
+.moon .shade{position:absolute;inset:-1px;border-radius:50%;background:#0d1733;opacity:.93}
+body[data-sky="day"] .moon .shade{background:#4f93dc;opacity:.9}
+body[data-sky="dusk"] .moon .shade{background:#5a4a86;opacity:.9}
+.glow{position:absolute;left:-10%;right:-10%;top:-30%;height:80%;background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.18),rgba(255,255,255,0) 60%)}
+body[data-sky="night"] .glow{background:radial-gradient(ellipse at 30% 10%,rgba(90,120,200,.25),rgba(90,120,200,0) 60%)}
+.horizon{position:absolute;left:0;right:0;bottom:0;height:34%;background:linear-gradient(to top,rgba(255,255,255,.28),rgba(255,255,255,0))}
+body[data-sky="dusk"] .horizon{height:42%;background:linear-gradient(to top,rgba(255,170,110,.55),rgba(255,140,120,.18) 55%,rgba(255,140,120,0))}
+body[data-sky="night"] .horizon{background:linear-gradient(to top,rgba(70,100,170,.35),rgba(70,100,170,0))}
+.clouds{position:absolute;inset:0;opacity:.9}
+body[data-sky="dusk"] .clouds{opacity:.55} body[data-sky="night"] .clouds{opacity:.14}
+.clouds span{position:absolute;border-radius:50%;filter:blur(22px);background:radial-gradient(ellipse,rgba(255,255,255,.75),rgba(255,255,255,0) 68%);animation:drift linear infinite}
+body[data-sky="dusk"] .clouds span{background:radial-gradient(ellipse,rgba(255,200,180,.8),rgba(255,180,170,0) 68%)}
+.clouds .c1{width:520px;height:120px;top:18%;left:-30%;animation-duration:210s}
+.clouds .c2{width:380px;height:90px;top:46%;left:-20%;animation-duration:260s;animation-delay:-120s}
+.clouds .c3{width:640px;height:150px;top:68%;left:-40%;animation-duration:300s;animation-delay:-60s}
+.clouds .c4{width:300px;height:70px;top:8%;left:-25%;animation-duration:180s;animation-delay:-150s}
+@keyframes drift{from{transform:translateX(0)}to{transform:translateX(160vw)}}
+
 /* the card */
 .card{position:relative;background:var(--glass);border:1px solid var(--glass-line);border-radius:26px;padding:20px 20px 18px;display:flex;flex-direction:column;gap:16px;-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:0 18px 40px rgba(5,10,30,.22);cursor:pointer;overflow:hidden}
 .card:not(.empty):hover{background:rgba(255,255,255,.17)}
@@ -172,10 +204,18 @@ body.kiosk .hint{display:none}
 body.kiosk .gear{opacity:.2}
 
 @media (max-width:380px){ .fno{font-size:1.6rem} .stat dd{font-size:1.2rem} .logo{width:54px;height:54px} .facts{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (prefers-reduced-motion: reduce){ .sweep span{animation:none;opacity:.3;transform:scale(.6)} .sheet,.scrim{transition:none} }
+@media (prefers-reduced-motion: reduce){ .sweep span{animation:none;opacity:.3;transform:scale(.6)} .sheet,.scrim{transition:none} .stars i,.clouds span{animation:none} .clouds span{transform:translateX(45vw)} }
 </style>
 </head>
 <body data-sky="night">
+<div id="sky" aria-hidden="true">
+  <div class="stars"></div>
+  <div class="glow"></div>
+  <div class="sun"></div>
+  <div class="moon"><span class="shade"></span></div>
+  <div class="clouds"><span class="c1"></span><span class="c2"></span><span class="c3"></span><span class="c4"></span></div>
+  <div class="horizon"></div>
+</div>
 <div class="app">
   <header class="top">
     <div class="loc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span id="where">Overhead</span></div>

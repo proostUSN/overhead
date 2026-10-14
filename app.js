@@ -101,11 +101,13 @@ function titleCase(s) { return s.toLowerCase().replace(/\b([a-z])/g, m => m.toUp
 const isHeli = a => a.category === 'A7' || /^(R22|R44|R66|EC|AS|B06|B407|B412|S76|A139|H60)/.test(a.type || '');
 
 /* ---------- data sources ---------- */
-const nmFor = mi => Math.min(250, Math.max(1, Math.ceil(mi / MI_PER_NM) + 1));
+// Your exact position never leaves the phone: queries use a point rounded to 0.01° (under a mile),
+// with the search circle widened to cover the difference; exact distances are worked out on the device.
+const nmFor = mi => Math.min(250, Math.max(1, Math.ceil(mi / MI_PER_NM) + 2));
 const SOURCES = {
-  airplaneslive: { label: 'airplanes.live', url: (lat, lon, mi) => viaRelay(`https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${nmFor(mi)}`) },
-  adsblol:       { label: 'adsb.lol',       url: (lat, lon, mi) => viaRelay(`https://api.adsb.lol/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${nmFor(mi)}`) },
-  adsbfi:        { label: 'adsb.fi',        url: (lat, lon, mi) => viaRelay(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(4)}/lon/${lon.toFixed(4)}/dist/${nmFor(mi)}`) },
+  airplaneslive: { label: 'airplanes.live', url: (lat, lon, mi) => viaRelay(`https://api.airplanes.live/v2/point/${lat.toFixed(2)}/${lon.toFixed(2)}/${nmFor(mi)}`) },
+  adsblol:       { label: 'adsb.lol',       url: (lat, lon, mi) => viaRelay(`https://api.adsb.lol/v2/point/${lat.toFixed(2)}/${lon.toFixed(2)}/${nmFor(mi)}`) },
+  adsbfi:        { label: 'adsb.fi',        url: (lat, lon, mi) => viaRelay(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(2)}/lon/${lon.toFixed(2)}/dist/${nmFor(mi)}`) },
   local:         { label: 'your receiver',  url: () => cfg.localUrl },
 };
 const AUTO_ORDER = ['airplaneslive', 'adsblol', 'adsbfi'];
@@ -337,23 +339,69 @@ async function poll(now) {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(true); });
 
 
-/* ---------- sky: page colour follows the sun at your location ---------- */
-function sunElevation(lat, lon, date = new Date()) {
-  const d = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
-  const g = rad((357.529 + 0.98560028 * d) % 360);
-  const q = (280.459 + 0.98564736 * d) % 360;
-  const L = rad((q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) % 360);
-  const e = rad(23.439 - 0.00000036 * d);
-  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
-  const dec = Math.asin(Math.sin(e) * Math.sin(L));
+/* ---------- sky: colour, sun, moon, stars and clouds follow the real sky at your location ---------- */
+function horizontal(ra, dec, lat, lon, d) {
   const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
-  const ha = rad(gmst * 15 + lon) - ra;
-  return deg(Math.asin(Math.sin(rad(lat)) * Math.sin(dec) + Math.cos(rad(lat)) * Math.cos(dec) * Math.cos(ha)));
+  const ha = rad(gmst * 15 + lon) - ra, φ = rad(lat);
+  const alt = Math.asin(Math.sin(φ) * Math.sin(dec) + Math.cos(φ) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(φ) - Math.sin(φ) * Math.cos(ha));
+  return { alt: deg(alt), az: (deg(az) + 360) % 360 };
 }
+const jDays = (date = new Date()) => date.getTime() / 86400000 + 2440587.5 - 2451545.0;
+function sunPos(lat, lon, date) {
+  const d = jDays(date);
+  const g = rad((357.529 + 0.98560028 * d) % 360), q = (280.459 + 0.98564736 * d) % 360;
+  const L = rad((q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) % 360), e = rad(23.439 - 0.00000036 * d);
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+  return { ...horizontal(ra, dec, lat, lon, d), eclLon: L };
+}
+function moonPos(lat, lon, date) {
+  const d = jDays(date), e = rad(23.439);
+  const Lm = rad((218.316 + 13.176396 * d) % 360), M = rad((134.963 + 13.064993 * d) % 360), F = rad((93.272 + 13.229350 * d) % 360);
+  const λ = Lm + rad(6.289) * Math.sin(M), β = rad(5.128) * Math.sin(F);
+  const ra = Math.atan2(Math.sin(λ) * Math.cos(e) - Math.tan(β) * Math.sin(e), Math.cos(λ));
+  const dec = Math.asin(Math.sin(β) * Math.cos(e) + Math.cos(β) * Math.sin(e) * Math.sin(λ));
+  const elong = λ - sunPos(lat, lon, date).eclLon;              // angle from the sun → phase
+  return { ...horizontal(ra, dec, lat, lon, d), lit: (1 - Math.cos(elong)) / 2, waxing: Math.sin(elong) > 0 };
+}
+const sunElevation = (lat, lon, date) => sunPos(lat, lon, date).alt;
 function skyPhase() {
   const p = here || { lat: 30, lon: -95 };
   const el = sunElevation(p.lat, p.lon);
   return el > 8 ? 'day' : el > -7 ? 'dusk' : 'night';
+}
+// Screen placement: facing south, east on the left and west on the right. The horizon is the bottom
+// edge and straight up is mid-screen, so the sun and moon sit in the open sky below the card.
+function skyXY(az, alt) {
+  const x = 50 + Math.max(-44, Math.min(44, ((az - 180) / 90) * 40));
+  const y = 97 - Math.max(-3, alt) / 90 * 44;
+  return [x, y];
+}
+let starsBuilt = false;
+function paintSky() {
+  const sky = $('sky'); if (!sky) return;
+  const p = here || { lat: 30, lon: -95 }, now = new Date();
+  const sun = sunPos(p.lat, p.lon, now), moon = moonPos(p.lat, p.lon, now);
+  if (!starsBuilt) {
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    sky.querySelector('.stars').innerHTML = Array.from({ length: 140 }, () => {
+      const sz = rnd() < 0.12 ? 2.2 : rnd() < 0.5 ? 1.4 : 1;
+      return `<i style="left:${(rnd() * 100).toFixed(2)}%;top:${(rnd() * 72).toFixed(2)}%;width:${sz}px;height:${sz}px;animation-delay:${(rnd() * 6).toFixed(1)}s;opacity:${(0.35 + rnd() * 0.65).toFixed(2)}"></i>`;
+    }).join('');
+    starsBuilt = true;
+  }
+  // stars fade in as the sun drops below the horizon
+  sky.style.setProperty('--stars', Math.max(0, Math.min(1, (-sun.alt - 2) / 10)).toFixed(2));
+  const s = sky.querySelector('.sun'), m = sky.querySelector('.moon');
+  const [sx, sy] = skyXY(sun.az, sun.alt);
+  s.style.left = sx + '%'; s.style.top = sy + '%'; s.style.opacity = sun.alt > -3 ? (sun.alt < 4 ? 0.75 : 1) : 0;
+  const [mx, my] = skyXY(moon.az, moon.alt);
+  m.style.left = mx + '%'; m.style.top = my + '%';
+  m.style.opacity = moon.alt > -1 ? (sun.alt > 8 ? 0.45 : 1) : 0;
+  // phase: a shadow disc slides across; waxing lit on the right (northern hemisphere view)
+  const off = (moon.waxing ? -1 : 1) * moon.lit * 100;
+  m.querySelector('.shade').style.transform = `translateX(${off.toFixed(0)}%)`;
+  m.title = `Moon ${Math.round(moon.lit * 100)}% lit`;
 }
 
 /* ---------- card building blocks ---------- */
@@ -541,6 +589,7 @@ function render() {
   document.body.classList.toggle('kiosk', !!cfg.kiosk);
   document.documentElement.classList.toggle('kiosk', !!cfg.kiosk);
   document.body.dataset.sky = skyPhase();
+  paintSky();
   if (!state.list.some(a => a.hex === state.selected)) state.selected = state.list[0]?.hex || null;
   const a = state.list.find(x => x.hex === state.selected);
   $('tabs').innerHTML = tabsHTML();
