@@ -164,7 +164,7 @@ async function getTraffic(lat, lon) {
 }
 
 /* ---------- enrichment: routes, aircraft records, photos ---------- */
-const CACHE_KEY = 'overhead.cache.v1';
+const CACHE_KEY = 'overhead.cache.v2'; // bumped: drop routes cached from the older source
 const enrich = { route: new Map(), ac: new Map(), photo: new Map(), airline: new Map(), pending: new Set(), queue: [] };
 (function loadCache() {
   const c = store(CACHE_KEY); if (!c) return;
