@@ -359,12 +359,16 @@ let AIRPORTS = [];
 fetch('airports.json').then(r => r.ok ? r.json() : []).then(list => { AIRPORTS = list.map(([code, lat, lon, city]) => ({ code, lat, lon, city })); scheduleRender(); }).catch(() => {});
 
 // The airport a climbing aircraft just left (behind it), or a descending one is heading for (ahead of it).
-function airportFor(a, mode) {
+// Scored by how well the distance fits a normal climb/descent (~300 ft per mile) and how well the
+// heading lines up; airports the route database lists for this flight get a strong preference.
+function airportFor(a, mode, preferred = []) {
   if (!AIRPORTS.length || a.alt == null) return null;
-  const maxMi = Math.min(60, Math.max(12, 10 + a.alt / 300));   // ~300 ft per mile on a normal climb or descent
+  const expect = a.alt / 300;                                  // miles from the runway on a 3° path
+  const maxMi = Math.min(90, Math.max(15, expect * 2 + 10));
+  const want = new Set(preferred.map(x => x && x.code).filter(Boolean));
   let best = null, bestScore = Infinity;
   for (const ap of AIRPORTS) {
-    if (Math.abs(ap.lat - a.lat) > 1.2) continue;
+    if (Math.abs(ap.lat - a.lat) > 1.5) continue;
     const d = distMi(ap.lat, ap.lon, a.lat, a.lon);
     if (d > maxMi) continue;
     let diff = 0;
@@ -373,7 +377,8 @@ function airportFor(a, mode) {
       diff = Math.abs(((b - a.track) + 540) % 360 - 180);
       if (diff > 100) continue;
     }
-    const score = d + diff * 0.4;
+    let score = Math.abs(d - expect) + diff * 0.4;
+    if (want.has(ap.code)) score -= 25;                         // the database says this flight serves it
     if (score < bestScore) { bestScore = score; best = ap; }
   }
   return best;
@@ -383,7 +388,7 @@ function airportFor(a, mode) {
 function inferLeg(a, r) {
   if (a.ground || a.alt == null || a.alt > 18000 || a.vrate == null || Math.abs(a.vrate) < 400) return null;
   const mode = a.vrate > 0 ? 'from' : 'to';
-  const ap = airportFor(a, mode);
+  const ap = airportFor(a, mode, r?.stops || (r?.from ? [r.from, r.to] : []));
   if (!ap) return null;
   const stops = (r?.stops || (r?.from ? [r.from, r.to] : [])).filter(x => x && x.lat != null && x.code !== ap.code);
   let other = null, bestDiff = 60;
