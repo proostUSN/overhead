@@ -1,5 +1,5 @@
 /* Overhead service worker: app shell offline, live data always from the network. */
-const VERSION = 'overhead-v3';
+const VERSION = 'overhead-v4';
 const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 const PHOTOS = 'overhead-photos';
 const FONTS = 'overhead-fonts';
@@ -21,13 +21,17 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // App shell: serve from cache, refresh in the background.
+  // App shell: network first so updates appear right away; cached copy when offline.
   if (url.origin === location.origin) {
     if (url.pathname.endsWith('.json')) return; // a local receiver's aircraft.json must stay live
     e.respondWith(caches.open(VERSION).then(async c => {
-      const hit = await c.match(req, { ignoreSearch: true });
-      const net = fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); return r; }).catch(() => hit);
-      return hit || net;
+      try {
+        const r = await fetch(req, { cache: 'no-cache' });
+        if (r.ok) c.put(req, r.clone());
+        return r;
+      } catch {
+        return (await c.match(req, { ignoreSearch: true })) || (await c.match('index.html')) || Response.error();
+      }
     }));
     return;
   }
