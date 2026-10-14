@@ -758,6 +758,9 @@ let lock;
 async function wake() { try { if ('wakeLock' in navigator && cfg.kiosk) lock = await navigator.wakeLock.request('screen'); } catch { /* not granted */ } }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && cfg.kiosk) wake(); });
 
+// Read-only snapshot for troubleshooting from the browser console: overheadDebug()
+window.overheadDebug = () => ({ list: state.list.map(a => ({ cs: a.callsign, hex: a.hex, route: routeOf(a) && routeOf(a).from ? routeOf(a).from.code + '-' + routeOf(a).to.code : routeOf(a) === null ? null : 'none' })), routesKnown: [...enrich.route.keys()], pending: [...enrich.pending], queue: enrich.queue.length });
+
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
