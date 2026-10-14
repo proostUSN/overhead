@@ -165,19 +165,19 @@ async function getTraffic(lat, lon) {
 
 /* ---------- enrichment: routes, aircraft records, photos ---------- */
 const CACHE_KEY = 'overhead.cache.v1';
-const enrich = { route: new Map(), ac: new Map(), photo: new Map(), pending: new Set(), queue: [] };
+const enrich = { route: new Map(), ac: new Map(), photo: new Map(), airline: new Map(), pending: new Set(), queue: [] };
 (function loadCache() {
   const c = store(CACHE_KEY); if (!c) return;
   const now = Date.now();
-  for (const k of ['route', 'ac', 'photo']) for (const [id, v] of Object.entries(c[k] || {})) if (v && v.exp > now) enrich[k].set(id, v.data);
+  for (const k of ['route', 'ac', 'photo', 'airline']) for (const [id, v] of Object.entries(c[k] || {})) if (v && v.exp > now) enrich[k].set(id, v.data);
 })();
 let saveTimer;
 function saveCache() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     const out = {}; const now = Date.now();
-    const ttl = { route: 6 * 3600e3, ac: 7 * 86400e3, photo: 7 * 86400e3 };
-    for (const k of ['route', 'ac', 'photo']) {
+    const ttl = { route: 6 * 3600e3, ac: 7 * 86400e3, photo: 7 * 86400e3, airline: 30 * 86400e3 };
+    for (const k of ['route', 'ac', 'photo', 'airline']) {
       out[k] = {}; const entries = [...enrich[k].entries()].slice(-300);
       for (const [id, data] of entries) out[k][id] = { exp: now + ttl[k], data };
     }
@@ -196,20 +196,15 @@ async function lookupRoute(a) {
       return { from: ap(fr.origin), to: ap(fr.destination), airline: fr.airline?.name || '', airlineIata: fr.airline?.iata || '', airlineIcao: fr.airline?.icao || '', flightNo: fr.callsign_iata || '', via: 'adsbdb' };
     }
   } catch (e) { if (e.status && e.status !== 404) throw e; }
-  // 2) adsb.lol route set (uses position to judge plausibility; needs the relay)
-  if (cfg.relay) try {
-    const j = await fetchJSON(viaRelay('https://api.adsb.lol/api/0/routeset'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ planes: [{ callsign: cs, lat: a.lat, lng: a.lon }] }),
-    });
-    const r = Array.isArray(j) ? j[0] : null;
-    const aps = r?._airports;
-    if (aps && aps.length >= 2) {
-      const ap = p => ({ code: p.iata || p.icao, icao: p.icao, name: p.name, city: p.location, lat: p.lat, lon: p.lon });
-      return { from: ap(aps[0]), to: ap(aps[aps.length - 1]), airline: '', via: 'adsb.lol', plausible: r.plausible !== false && r.plausible !== 0 };
-    }
-  } catch { /* fall through */ }
   return null;
+}
+
+async function lookupAirline(icao) {
+  try {
+    const j = await fetchJSON(`https://api.adsbdb.com/v0/airline/${encodeURIComponent(icao)}`);
+    const x = Array.isArray(j?.response) ? j.response[0] : j?.response;
+    return x && x.name ? { name: x.name, iata: x.iata || '', icao: x.icao || icao } : null;
+  } catch (e) { if (e.status === 404) return null; throw e; }
 }
 
 async function lookupAircraft(hex) {
@@ -259,6 +254,7 @@ function enrichTop(list) {
   for (const a of list.slice(0, 10)) {
     if (!a.reg || !a.type) want('ac', a.hex, () => lookupAircraft(a.hex));
     if (a.callsign && !a.ground) want('route', a.callsign.toUpperCase(), () => lookupRoute(a));
+    if (/^[A-Z]{3}\d/.test(a.callsign)) want('airline', a.callsign.slice(0, 3), () => lookupAirline(a.callsign.slice(0, 3)));
     // photos wait for the aircraft record when it might supply a fallback
     if (!a.reg && !enrich.ac.has(a.hex)) continue;
     want('photo', a.hex, () => lookupPhoto({ ...a, reg: a.reg || enrich.ac.get(a.hex)?.reg }));
@@ -416,16 +412,20 @@ const ARROW = b => `<svg class="brg" viewBox="0 0 24 24" style="transform:rotate
 
 const routeOf = a => a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
 const airlineIcaoOf = a => routeOf(a)?.airlineIcao || (/^[A-Z]{3}\d/.test(a.callsign) ? a.callsign.slice(0, 3) : '');
+const airlineOf = a => { const i = airlineIcaoOf(a); return i ? enrich.airline.get(i) : null; };
 const isAirline = a => !!(routeOf(a)?.airline || /^[A-Z]{3}\d/.test(a.callsign));
 function flightLabel(a) {
   const r = routeOf(a);
-  const f = r?.flightNo || a.callsign || a.reg || a.hex.toUpperCase();
+  const al = airlineOf(a);
+  const fromIcao = al?.iata && /^[A-Z]{3}\d/.test(a.callsign) ? al.iata + a.callsign.slice(3) : '';
+  const f = r?.flightNo || fromIcao || a.callsign || a.reg || a.hex.toUpperCase();
   const m = /^([A-Z0-9]{2,3}?)(\d{1,4}[A-Z]?)$/.exec(f);
   return m && isAirline(a) ? `${m[1]} ${m[2]}` : f;
 }
 function airlineName(a) {
   const r = routeOf(a), e = enrich.ac.get(a.hex);
   if (r?.airline) return r.airline;
+  if (airlineOf(a)?.name) return airlineOf(a).name;
   if (a.op) return titleCase(a.op);
   if (!isAirline(a)) return isHeli(a) ? 'Helicopter' : (e?.owner ? titleCase(e.owner) : 'General aviation');
   return '';
@@ -436,7 +436,7 @@ function manufacturer(a) {
   return typeName(a).split(' ')[0];
 }
 function logoHTML(a) {
-  const r = routeOf(a), icao = airlineIcaoOf(a), iata = r?.airlineIata || '';
+  const r = routeOf(a), icao = airlineIcaoOf(a), iata = r?.airlineIata || airlineOf(a)?.iata || '';
   const srcs = [];
   if (iata) srcs.push(`https://images.kiwi.com/airlines/128/${iata}.png`);
   if (icao) srcs.push(`https://www.flightaware.com/images/airline_logos/180px/${icao}.png`);
@@ -462,8 +462,21 @@ window.__logoFail = img => {
 function phase(a) { if (a.ground) return 'ground'; const t = trend(a); return t === 'climb' ? 'climb' : t === 'desc' ? 'descend' : 'cruise'; }
 const PHASE_LABEL = { climb: 'Climbing', descend: 'Descending', cruise: 'Level', ground: 'On the ground' };
 
+// Callsign databases sometimes list a different leg of the same flight number. Reject a route that
+// doesn't fit where the aircraft actually is.
+function routePlausible(r, a) {
+  if (!r || r.from?.lat == null || r.to?.lat == null) return null;
+  const dFrom = distMi(r.from.lat, r.from.lon, a.lat, a.lon), dTo = distMi(a.lat, a.lon, r.to.lat, r.to.lon);
+  const total = distMi(r.from.lat, r.from.lon, r.to.lat, r.to.lon);
+  if (dFrom + dTo - total > Math.max(150, total * 0.25)) return false;           // far off the path between the airports
+  if (!a.ground && a.alt != null && a.alt < 8000 && Math.min(dFrom, dTo) > 40) return false; // low, but near neither airport
+  return true;
+}
 function progressHTML(a) {
   const r = routeOf(a);
+  if (r && r.from && r.to && routePlausible(r, a) === false) {
+    return `<div class="noroute">Route uncertain: listed as ${esc(r.from.code)} → ${esc(r.to.code)}, which doesn't match where this flight is.</div>`;
+  }
   if (!r || !r.from || !r.to) {
     const note = a.ground ? 'On the ground nearby' : isAirline(a) ? 'Route not published for this flight' : 'Private flight · no published route';
     return `<div class="noroute">${note}</div>`;
@@ -570,7 +583,7 @@ function detailHTML(a) {
     <div class="dtop"><div><h2>${esc(flightLabel(a))}</h2><p>${esc([airlineName(a), typeName(a)].filter(Boolean).join(' · '))}</p></div>
       <button class="close" data-act="close" aria-label="Close" type="button">✕</button></div>
     ${photoBlock(a)}
-    ${r && r.from ? `<div class="droute"><div><b>${esc(r.from.code)}</b><span>${esc(r.from.name || r.from.city || '')}</span></div><div class="r"><b>${esc(r.to.code)}</b><span>${esc(r.to.name || r.to.city || '')}</span></div></div>` : ''}
+    ${r && r.from && routePlausible(r, a) !== false ? `<div class="droute"><div><b>${esc(r.from.code)}</b><span>${esc(r.from.name || r.from.city || '')}</span></div><div class="r"><b>${esc(r.to.code)}</b><span>${esc(r.to.name || r.to.city || '')}</span></div></div>` : ''}
     <dl class="facts">
       ${f('Altitude', fmtAlt(a))}${f('Vertical rate', fmtRate(a.vrate))}${f('Ground speed', fmtSpd(a.gs))}
       ${f('Heading', a.track != null ? Math.round(a.track) + '°' : '—')}${f('From you', `${fmtDist(a.dist)} ${cardinal(a.brg)}`)}${f('Squawk', esc(a.squawk || '—'))}
@@ -582,7 +595,7 @@ function detailHTML(a) {
       ${a.callsign ? `<a href="https://www.flightaware.com/live/flight/${encodeURIComponent(a.callsign)}" target="_blank" rel="noopener">FlightAware</a>` : ''}
       ${tail ? `<a href="https://www.planespotters.net/search?q=${encodeURIComponent(tail)}" target="_blank" rel="noopener">Photos</a>` : ''}
     </div>
-    ${r && r.via !== 'demo' ? `<p class="fine">Route from a callsign database (${esc(r.via)}); occasionally out of date.</p>` : ''}`;
+    ${r && r.via !== 'demo' ? `<p class="fine">${routePlausible(r, a) === false ? `Listed route ${esc(r.from.code)} → ${esc(r.to.code)} doesn't match this flight's position, so it isn't shown. ` : ''}Routes come from a callsign database (${esc(r.via)}) and are occasionally out of date.</p>` : ''}`;
 }
 
 /* ---------- render ---------- */
