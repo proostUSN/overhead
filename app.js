@@ -187,7 +187,16 @@ function saveCache() {
 
 async function lookupRoute(a) {
   const cs = a.callsign.toUpperCase();
-  // 1) adsbdb callsign database
+  // 1) adsb.lol route database, checked against the aircraft's current position (via the relay)
+  if (cfg.relay) try {
+    const j = await fetchJSON(viaRelay(`https://api.adsb.lol/api/0/route/${encodeURIComponent(cs)}/${a.lat.toFixed(2)}/${a.lon.toFixed(2)}`));
+    const aps = j?._airports;
+    if (aps && aps.length >= 2 && j.plausible !== false && j.plausible !== 0) {
+      const ap = p => ({ code: p.iata || p.icao, icao: p.icao, name: p.name, city: p.location, lat: p.lat, lon: p.lon });
+      return { from: ap(aps[0]), to: ap(aps[aps.length - 1]), airline: '', airlineIcao: j.airline_code || '', via: 'adsb.lol' };
+    }
+  } catch (e) { if (e.status && e.status !== 404) throw e; }
+  // 2) adsbdb callsign database
   try {
     const j = await fetchJSON(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`);
     const fr = j?.response?.flightroute;
