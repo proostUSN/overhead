@@ -64,7 +64,7 @@ function fmtAlt(a) {
 }
 const fmtSpd = gs => gs == null ? '—' : metric() ? `${Math.round(gs * 1.852)} km/h` : `${Math.round(gs)} kt`;
 const fmtDist = mi => metric() ? `${(mi * 1.609).toFixed(1)} km` : `${mi.toFixed(1)} mi`;
-const fmtRate = v => v == null ? '—' : metric() ? `${Math.round(v * 0.00508 * 10) / 10} m/s` : `${v > 0 ? '+' : ''}${Math.round(v / 10) * 10} fpm`;
+const fmtRate = v => v == null ? '—' : metric() ? `${Math.round(v * 0.00508 * 10) / 10} m/s` : `${v > 0 ? '+' : ''}${(Math.round(v / 10) * 10).toLocaleString()} fpm`;
 const trend = a => a.ground || a.vrate == null ? '' : a.vrate > 300 ? 'climb' : a.vrate < -300 ? 'desc' : '';
 const trendArrow = a => ({ climb: ' ↑', desc: ' ↓' }[trend(a)] || '');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -188,7 +188,7 @@ async function lookupRoute(a) {
     const fr = j?.response?.flightroute;
     if (fr && fr.origin && fr.destination) {
       const ap = p => ({ code: p.iata_code || p.icao_code, icao: p.icao_code, name: p.name, city: p.municipality, lat: p.latitude, lon: p.longitude });
-      return { from: ap(fr.origin), to: ap(fr.destination), airline: fr.airline?.name || '', via: 'adsbdb' };
+      return { from: ap(fr.origin), to: ap(fr.destination), airline: fr.airline?.name || '', airlineIata: fr.airline?.iata || '', airlineIcao: fr.airline?.icao || '', flightNo: fr.callsign_iata || '', via: 'adsbdb' };
     }
   } catch (e) { if (e.status && e.status !== 404) throw e; }
   // 2) adsb.lol route set (uses position to judge plausibility; needs the relay)
@@ -262,12 +262,11 @@ function enrichTop(list) {
 
 /* ---------- demo traffic ---------- */
 const DEMO = [
-  { hex:'a1b2c3', callsign:'UAL1734', reg:'N37522', type:'B39M', alt:6200, vrate:1800, gs:240, from:['IAH','Houston'], to:['DEN','Denver'], airline:'United Airlines' },
-  { hex:'a4d5e6', callsign:'SWA2291', reg:'N8710M', type:'B38M', alt:11000, vrate:-1100, gs:290, from:['MCO','Orlando'], to:['HOU','Houston'], airline:'Southwest Airlines' },
-  { hex:'a7f8a9', callsign:'AAL2410', reg:'N953NN', type:'B738', alt:34000, vrate:0, gs:452, from:['MIA','Miami'], to:['PHX','Phoenix'], airline:'American Airlines' },
+  { hex:'a1b2c3', callsign:'UAL1734', reg:'N37522', type:'B39M', alt:6200, vrate:1800, gs:240, from:['IAH','Houston','George Bush Intercontinental',29.9844,-95.3414], to:['DEN','Denver','Denver International',39.8617,-104.6731], airline:'United Airlines', ai:'UA', ao:'UAL', fno:'UA1734' },
+  { hex:'a4d5e6', callsign:'SWA2291', reg:'N8710M', type:'B38M', alt:11000, vrate:-1100, gs:290, from:['MCO','Orlando','Orlando International',28.4294,-81.3089], to:['AUS','Austin','Austin-Bergstrom International',30.1945,-97.6699], airline:'Southwest Airlines', ai:'WN', ao:'SWA', fno:'WN2291' },
+  { hex:'a7f8a9', callsign:'AAL2410', reg:'N953NN', type:'B738', alt:34000, vrate:0, gs:452, from:['MIA','Miami','Miami International',25.7959,-80.287], to:['PHX','Phoenix','Phoenix Sky Harbor',33.4342,-112.0116], airline:'American Airlines', ai:'AA', ao:'AAL', fno:'AA2410' },
   { hex:'ab0c1d', callsign:'N172SP', reg:'N172SP', type:'C172', alt:2400, vrate:0, gs:105, category:'A1' },
-  { hex:'ac2e3f', callsign:'FDX1407', reg:'N851FD', type:'B763', alt:23000, vrate:-1500, gs:380, from:['MEM','Memphis'], to:['IAH','Houston'], airline:'FedEx' },
-  { hex:'ad4a5b', callsign:'LIFE2', reg:'N912LF', type:'EC45', alt:1500, vrate:0, gs:120, category:'A7' },
+  { hex:'ac2e3f', callsign:'FDX1407', reg:'N851FD', type:'B763', alt:23000, vrate:-1500, gs:380, from:['MEM','Memphis','Memphis International',35.0424,-89.9767], to:['SAT','San Antonio','San Antonio International',29.5337,-98.4698], airline:'FedEx', ai:'FX', ao:'FDX', fno:'FX1407' },
 ];
 const demoState = new Map();
 function demoTraffic(lat, lon) {
@@ -278,8 +277,9 @@ function demoTraffic(lat, lon) {
     const r = cfg.radiusMi * (0.25 + 0.6 * ((Math.sin(t / 40 + s.phase) + 1) / 2));
     const ang = rad((s.hdg + t * (2 + i)) % 360);
     const dLat = (r * Math.cos(ang)) / 69, dLon = (r * Math.sin(ang)) / (69 * Math.cos(rad(lat)));
-    if (d.from && !enrich.route.has(d.callsign)) enrich.route.set(d.callsign, { from: { code: d.from[0], city: d.from[1] }, to: { code: d.to[0], city: d.to[1] }, airline: d.airline, via: 'demo' });
-    out.push({ ...d, lat: lat + dLat, lon: lon + dLon, track: (deg(ang) + 90) % 360, ground: false, desc: '', op: d.airline || '', squawk: i === 5 ? '1200' : String(4000 + i * 111), category: d.category || 'A3', seenPos: 1, emergency: '' });
+    const apd = x => ({ code: x[0], city: x[1], name: x[2], lat: x[3], lon: x[4] });
+    if (d.from && !enrich.route.has(d.callsign)) enrich.route.set(d.callsign, { from: apd(d.from), to: apd(d.to), airline: d.airline, airlineIata: d.ai, airlineIcao: d.ao, flightNo: d.fno, via: 'demo' });
+    out.push({ ...d, lat: lat + dLat, lon: lon + dLon, track: (deg(ang) + 90) % 360, ground: false, desc: '', op: d.airline || '', squawk: d.type === 'C172' ? '1200' : String(4000 + i * 111), category: d.category || 'A3', seenPos: 1, emergency: '' });
   });
   return out;
 }
@@ -309,7 +309,7 @@ let pollTimer;
 async function poll(now) {
   clearTimeout(pollTimer);
   if (document.hidden && !cfg.kiosk) return;
-  if (!here && cfg.demo) here = { lat: cfg.lat ?? 39.8617, lon: cfg.lon ?? -104.6731, fixed: true }; // demo needs a centre
+  if (!here && cfg.demo) here = { lat: cfg.lat ?? 30.6, lon: cfg.lon ?? -97.2, fixed: true }; // demo needs a centre
   if (here) {
     try {
       const { list, label } = await getTraffic(here.lat, here.lon);
@@ -323,6 +323,7 @@ async function poll(now) {
       for (const k of state.trails.keys()) if (!seen.has(k)) state.trails.delete(k);
       const inside = list.filter(a => a.dist <= cfg.radiusMi && (cfg.showGround || !a.ground)).sort((x, y) => x.dist - y.dist);
       state.wider = list.length;
+      if (inside.length) state.last = { name: flightLabel(inside[0]), at: Date.now() };
       state.list = inside; state.label = label; state.updated = Date.now(); state.error = null; state.needsRelay = false;
       enrichTop(inside);
     } catch (e) {
@@ -335,215 +336,262 @@ async function poll(now) {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(true); });
 
-/* ---------- rendering ---------- */
+
+/* ---------- sky: page colour follows the sun at your location ---------- */
+function sunElevation(lat, lon, date = new Date()) {
+  const d = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
+  const g = rad((357.529 + 0.98560028 * d) % 360);
+  const q = (280.459 + 0.98564736 * d) % 360;
+  const L = rad((q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) % 360);
+  const e = rad(23.439 - 0.00000036 * d);
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const ha = rad(gmst * 15 + lon) - ra;
+  return deg(Math.asin(Math.sin(rad(lat)) * Math.sin(dec) + Math.cos(rad(lat)) * Math.cos(dec) * Math.cos(ha)));
+}
+function skyPhase() {
+  const p = here || { lat: 30, lon: -95 };
+  const el = sunElevation(p.lat, p.lon);
+  return el > 8 ? 'day' : el > -7 ? 'dusk' : 'night';
+}
+
+/* ---------- card building blocks ---------- */
 const $ = id => document.getElementById(id);
-const PLANE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>';
-const HELI = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v1.6H13V7h1a4 4 0 0 1 4 4v1.5h4V14h-4.6A4 4 0 0 1 14 16h-1v2h4v1.6H7V18h4v-2a4 4 0 0 1-4-4H2v-1.5h5.2A4 4 0 0 1 11 7V5.6H3z"/></svg>';
-const ARROW = b => `<svg viewBox="0 0 24 24" style="transform:rotate(${Math.round(b)}deg)" aria-hidden="true"><path d="M12 2l6 18-6-4-6 4z"/></svg>`;
-const silhouette = a => isHeli(a) ? HELI : PLANE;
+const PLANE_PATH = 'M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z';
+const HELI_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v1.6H13V7h1a4 4 0 0 1 4 4v1.5h4V14h-4.6A4 4 0 0 1 14 16h-1v2h4v1.6H7V18h4v-2a4 4 0 0 1-4-4H2v-1.5h5.2A4 4 0 0 1 11 7V5.6H3z"/></svg>';
+const planeSVG = (rot = 0) => `<svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${rot}deg)"><path d="${PLANE_PATH}"/></svg>`;
+const ARROW = b => `<svg class="brg" viewBox="0 0 24 24" style="transform:rotate(${Math.round(b)}deg)" aria-hidden="true"><path d="M12 2l6 18-6-4-6 4z"/></svg>`;
 
-let rq;
-function scheduleRender() { if (!rq) rq = requestAnimationFrame(() => { rq = null; render(); }); }
-
-function routeHTML(a, big) {
-  const r = a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
-  if (r && r.from && r.to) {
-    const t = big ? `${esc(r.from.city || r.from.code)} → ${esc(r.to.city || r.to.code)}` : '';
-    return `<div class="route" title="${t}">${esc(r.from.code)}<span class="arr">→</span>${esc(r.to.code)}${r.to.city ? ` <span style="color:var(--muted);font-weight:500">· ${esc(r.to.city)}</span>` : ''}</div>`;
-  }
-  const label = a.ground ? 'On the ground' : (a.op ? esc(a.op) : (a.callsign && !cfg.demo ? 'Route unknown' : 'No flight plan'));
-  return `<div class="route none">${label}</div>`;
+const routeOf = a => a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
+const airlineIcaoOf = a => routeOf(a)?.airlineIcao || (/^[A-Z]{3}\d/.test(a.callsign) ? a.callsign.slice(0, 3) : '');
+const isAirline = a => !!(routeOf(a)?.airline || /^[A-Z]{3}\d/.test(a.callsign));
+function flightLabel(a) {
+  const r = routeOf(a);
+  const f = r?.flightNo || a.callsign || a.reg || a.hex.toUpperCase();
+  const m = /^([A-Z0-9]{2,3}?)(\d{1,4}[A-Z]?)$/.exec(f);
+  return m && isAirline(a) ? `${m[1]} ${m[2]}` : f;
 }
-function photoHTML(a, size) {
-  const p = enrich.photo.get(a.hex);
-  if (p && (p.thumb || p.large)) return `<img src="${esc(size === 'large' ? p.large : p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer-when-downgrade" onerror="this.remove()">`;
-  return silhouette(a);
-}
-function creditHTML(a) {
-  const p = enrich.photo.get(a.hex);
-  if (!p) return '';
-  const who = p.by ? `© ${esc(p.by)}` : 'Photo';
-  return p.link ? `<a href="${esc(p.link)}" target="_blank" rel="noopener">${who}</a> · ${esc(p.site)}` : `${who} · ${esc(p.site)}`;
-}
-const label = a => a.callsign || a.reg || a.hex.toUpperCase();
-
-function stripHTML(a) {
-  const sq = ['7500', '7600', '7700'].includes(a.squawk) || a.emergency ? `<span class="sq">${esc(a.squawk || 'EMERG')}</span>` : '';
-  const reg = a.reg || enrich.ac.get(a.hex)?.reg || '';
-  return `<li><button class="strip${state.selected === a.hex ? ' sel' : ''}" data-hex="${a.hex}" type="button">
-    <div class="ph">${photoHTML(a, 'thumb')}</div>
-    <div class="mid">
-      <div class="cs"><b>${esc(label(a))}</b>${reg && reg !== a.callsign ? `<span class="reg">${esc(reg)}</span>` : ''}${sq}</div>
-      ${routeHTML(a)}
-      <div class="type">${esc(typeName(a))}</div>
-    </div>
-    <div class="rt">
-      <div class="alt ${trend(a)}">${fmtAlt(a)}${trendArrow(a)}</div>
-      <div class="spd">${fmtSpd(a.gs)}</div>
-      <div class="dist">${ARROW(a.brg)}${fmtDist(a.dist)} ${cardinal(a.brg)}</div>
-    </div></button></li>`;
-}
-
-function scopeSVG() {
-  const S = 320, C = S / 2, Rpx = C - 22, k = Rpx / cfg.radiusMi;
-  const rings = [cfg.radiusMi / 3, (cfg.radiusMi * 2) / 3, cfg.radiusMi];
-  let g = `<svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Scope: aircraft positions around you, north up">`;
-  rings.forEach((r, i) => {
-    g += `<circle class="ring" cx="${C}" cy="${C}" r="${(r * k).toFixed(1)}"/>`;
-    const val = metric() ? (r * 1.609).toFixed(r * 1.609 < 10 ? 1 : 0) : (r % 1 ? r.toFixed(1) : r);
-    g += `<text class="ringlbl" x="${C + 4}" y="${(C - r * k + 11).toFixed(1)}">${val}${i === 2 ? (metric() ? ' km' : ' mi') : ''}</text>`;
-  });
-  g += `<text class="card-n" x="${C}" y="13" text-anchor="middle">N</text>`;
-  g += `<circle class="me" cx="${C}" cy="${C}" r="4"/>`;
-  const toXY = (lat, lon) => {
-    const d = distMi(here.lat, here.lon, lat, lon), b = rad(bearing(here.lat, here.lon, lat, lon));
-    return [C + Math.sin(b) * d * k, C - Math.cos(b) * d * k];
-  };
-  const shown = new Set(state.list.slice(0, 5).map(a => a.hex));
-  for (const a of state.list) {
-    const tr = state.trails.get(a.hex);
-    if (tr && tr.length > 1) g += `<polyline class="trail" points="${tr.map(p => toXY(p[0], p[1]).map(n => n.toFixed(1)).join(',')).join(' ')}"/>`;
-  }
-  for (const a of state.list) {
-    const [x, y] = toXY(a.lat, a.lon);
-    const h = rad(a.track ?? 0), len = 14;
-    const tx = x + Math.sin(h) * len, ty = y - Math.cos(h) * len;
-    const sel = state.selected === a.hex;
-    const lblRight = x < S - 70;
-    g += `<g class="blip ${trend(a)}${sel ? ' sel' : ''}" data-hex="${a.hex}">
-      ${sel ? `<circle class="halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9"/>` : ''}
-      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="14" fill="transparent"/>
-      ${a.track != null ? `<line class="t" x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}"/>` : ''}
-      <rect class="b" x="${(x - 3.5).toFixed(1)}" y="${(y - 3.5).toFixed(1)}" width="7" height="7"/>
-      ${shown.has(a.hex) || sel ? `<text x="${(lblRight ? x + 8 : x - 8).toFixed(1)}" y="${(y + 14).toFixed(1)}" text-anchor="${lblRight ? 'start' : 'end'}">${esc(label(a))}</text>` : ''}
-    </g>`;
-  }
-  return g + '</svg>';
-}
-
-function statusLine() {
-  const el = $('status');
-  el.classList.remove('stale', 'err');
-  let txt;
-  if (locError && !here) { el.classList.add('err'); txt = 'No location'; }
-  else if (!here) txt = 'Finding you…';
-  else if (state.error) { el.classList.add('err'); txt = `${state.errorSource || 'Data'}: ${state.error}`; }
-  else if (!state.updated) txt = 'Loading…';
-  else {
-    const age = Math.round((Date.now() - state.updated) / 1000);
-    if (age > cfg.refreshSec * 3) el.classList.add('stale');
-    txt = `${state.label} · ${age < 2 ? 'just now' : age + 's ago'}`;
-  }
-  el.innerHTML = `<span class="dot"></span>${esc(txt)}`;
-}
-
-function noticeHTML() {
-  if (locError && !here) return `<div class="notice"><h3>Where are you?</h3><p>${esc(locError)}</p><div class="row"><button class="btn primary" data-act="retryLoc" type="button">Try location again</button><button class="btn" data-act="settings" type="button">Set a fixed point</button><button class="btn" data-act="demo" type="button">Show demo traffic</button></div></div>`;
-  if (state.needsRelay) return `<div class="notice"><h3>Live data needs a relay</h3><p>The free ADS-B networks don’t let web pages read them directly. Add your relay address in Settings (setup steps are in the project README), or use your own receiver. Routes and photos already work.</p><div class="row"><button class="btn primary" data-act="settings" type="button">Open Settings</button><button class="btn" data-act="demo" type="button">Show demo traffic</button></div></div>`;
-  if (state.error && !state.list.length) return `<div class="notice"><h3>Can’t reach the flight data</h3><p>${cfg.source === 'local' ? `Your receiver at ${esc(cfg.localUrl)} didn’t answer (${esc(state.error)}). Check the URL in Settings.` : `The free ADS-B networks didn’t answer (${esc(state.error)}). This is usually brief; the app keeps retrying every ${cfg.refreshSec} seconds.`}</p><div class="row"><button class="btn" data-act="retry" type="button">Retry now</button><button class="btn" data-act="demo" type="button">Show demo traffic</button></div></div>`;
-  if (here && state.updated && !state.list.length) return `<div class="notice"><h3>Quiet skies</h3><p>No aircraft within ${fmtDist(cfg.radiusMi)} right now${state.wider ? `; ${state.wider} more just outside` : ''}. The list fills in as soon as something comes into range.</p></div>`;
+function airlineName(a) {
+  const r = routeOf(a), e = enrich.ac.get(a.hex);
+  if (r?.airline) return r.airline;
+  if (a.op) return titleCase(a.op);
+  if (!isAirline(a)) return isHeli(a) ? 'Helicopter' : (e?.owner ? titleCase(e.owner) : 'General aviation');
   return '';
 }
+function manufacturer(a) {
+  const e = enrich.ac.get(a.hex);
+  if (e?.manufacturer) return titleCase(e.manufacturer.split(/[ ,]/)[0]);
+  return typeName(a).split(' ')[0];
+}
+function logoHTML(a) {
+  const r = routeOf(a), icao = airlineIcaoOf(a), iata = r?.airlineIata || '';
+  const srcs = [];
+  if (iata) srcs.push(`https://images.kiwi.com/airlines/128/${iata}.png`);
+  if (icao) srcs.push(`https://www.flightaware.com/images/airline_logos/180px/${icao}.png`);
+  const badge = isAirline(a)
+    ? `<span class="badge code">${esc(icao || iata || '✈')}</span>`
+    : `<span class="badge ga">${isHeli(a) ? HELI_SVG : planeSVG(0)}<em>${esc(manufacturer(a))}</em></span>`;
+  if (!srcs.length) return badge;
+  // The badge sits underneath; the logo fades in on top only once it has actually loaded.
+  const known = srcs.find(u => logoOk.has(u));
+  if (known) return badge + `<img class="ok" src="${known}" alt="${esc(airlineName(a))} logo">`; // no fade on refresh
+  const live = srcs.filter(u => !logoBad.has(u));
+  if (!live.length) return badge;
+  return badge + `<img src="${live[0]}" data-next="${live.slice(1).join(' ')}" alt="${esc(airlineName(a))} logo" onload="window.__logoOk(this)" onerror="window.__logoFail(this)">`;
+}
+const logoOk = new Set(), logoBad = new Set();
+window.__logoOk = img => { logoOk.add(img.src); img.classList.add('ok'); };
+window.__logoFail = img => {
+  logoBad.add(img.src);
+  const next = (img.dataset.next || '').split(' ').filter(Boolean);
+  if (next.length) { img.dataset.next = next.slice(1).join(' '); img.src = next[0]; } else img.remove();
+};
 
-function featureHTML() {
-  if (!state.list.length) {
-    const t = new Date();
-    return `<div class="quiet"><div><div class="clock num">${t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div><p>${here ? `Nothing within ${fmtDist(cfg.radiusMi)}` : esc(locError || 'Waiting for location')}</p></div></div>`;
+function phase(a) { if (a.ground) return 'ground'; const t = trend(a); return t === 'climb' ? 'climb' : t === 'desc' ? 'descend' : 'cruise'; }
+const PHASE_LABEL = { climb: 'Climbing', descend: 'Descending', cruise: 'Level', ground: 'On the ground' };
+
+function progressHTML(a) {
+  const r = routeOf(a);
+  if (!r || !r.from || !r.to) {
+    const note = a.ground ? 'On the ground nearby' : isAirline(a) ? 'Route not published for this flight' : 'Private flight · no published route';
+    return `<div class="noroute">${note}</div>`;
   }
-  const a = state.list[state.feature % state.list.length];
-  const r = a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
-  return `<div class="fx-hero">${enrich.photo.get(a.hex)?.large ? photoHTML(a, 'large') : `<div class="ph">${silhouette(a)}</div>`}<div class="credit">${creditHTML(a)}</div></div>
-    <div class="fx-body">
-      <div style="min-width:0">
-        <div class="cs"><b>${esc(label(a))}</b><span class="reg">${esc(a.reg || '')}</span></div>
-        ${r && r.from ? `<div class="route">${esc(r.from.city || r.from.code)}<span class="arr">→</span>${esc(r.to.city || r.to.code)}</div>` : routeHTML(a)}
-        <div class="type">${esc(typeName(a))}${r?.airline ? ' · ' + esc(r.airline) : (a.op ? ' · ' + esc(a.op) : '')}</div>
-      </div>
-      <div class="rt"><div class="alt ${trend(a)}">${fmtAlt(a)}${trendArrow(a)}</div><div class="dist">${ARROW(a.brg)}${fmtDist(a.dist)} ${cardinal(a.brg)} · ${fmtSpd(a.gs)}</div></div>
-    </div>`;
+  let pct = null, flown = null, togo = null;
+  if (r.from.lat != null && r.to.lat != null) {
+    flown = distMi(r.from.lat, r.from.lon, a.lat, a.lon);
+    togo = distMi(a.lat, a.lon, r.to.lat, r.to.lon);
+    pct = Math.max(0, Math.min(100, (flown / (flown + togo)) * 100));
+  }
+  const ph = phase(a);
+  const sub = pct != null
+    ? `${Math.round(metric() ? flown * 1.609 : flown).toLocaleString()} ${metric() ? 'km' : 'mi'} flown · ${Math.round(metric() ? togo * 1.609 : togo).toLocaleString()} to go`
+    : 'Progress unavailable';
+  return `<div class="route">
+    <div class="ends">
+      <div class="ap"><b>${esc(r.from.code)}</b><span>${esc(r.from.city || r.from.name || '')}</span></div>
+      <div class="ap r"><b>${esc(r.to.code)}</b><span>${esc(r.to.city || r.to.name || '')}</span></div>
+    </div>
+    <div class="bar ${ph}" role="img" aria-label="${pct != null ? Math.round(pct) + '% of the way from ' + esc(r.from.code) + ' to ' + esc(r.to.code) : 'Route ' + esc(r.from.code) + ' to ' + esc(r.to.code)}">
+      <span class="track"></span>
+      ${pct != null ? `<span class="fill" style="width:${pct.toFixed(1)}%"></span><span class="plane" style="left:${pct.toFixed(1)}%">${planeSVG(90)}</span>` : ''}
+      <span class="pin l"></span><span class="pin r"></span>
+    </div>
+    <div class="sub"><span class="phase ${ph}">${PHASE_LABEL[ph]}</span><span>${sub}</span></div>
+  </div>`;
 }
 
-function detailHTML(a) {
-  const r = a.callsign ? enrich.route.get(a.callsign.toUpperCase()) : null;
+function statHTML(label, value, sub) { return `<div class="stat"><dt>${label}</dt><dd>${value}</dd>${sub ? `<div class="ssub">${sub}</div>` : ''}</div>`; }
+function altValue(a) {
+  if (a.ground) return 'Ground';
+  if (a.alt == null) return '—';
+  return metric() ? `${Math.round(a.alt * 0.3048).toLocaleString()}<small> m</small>` : `${Math.round(a.alt).toLocaleString()}<small> ft</small>`;
+}
+function cardHTML(a) {
   const e = enrich.ac.get(a.hex) || {};
-  const reg = a.reg || e.reg || '';
-  const operator = r?.airline || a.op || e.owner || '';
-  const fact = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+  const tail = a.reg || e.reg || '';
+  const air = airlineName(a);
+  const mph = a.gs != null ? Math.round(a.gs * 1.15078) : null;
+  const vr = a.vrate != null && Math.abs(a.vrate) > 100 ? `${a.vrate > 0 ? '↑' : '↓'} ${fmtRate(Math.abs(a.vrate)).replace('+', '')}` : (a.ground ? '' : 'level');
+  return `<article class="card" data-open="${a.hex}" tabindex="0" aria-label="${esc(flightLabel(a))}, tap for details">
+    <header class="head">
+      <div class="logo">${logoHTML(a)}</div>
+      <div class="ident">
+        <h2 class="fno">${esc(flightLabel(a))}</h2>
+        ${air ? `<div class="airline">${esc(air)}</div>` : ''}
+      </div>
+      <div class="where"><b>${fmtDist(a.dist)}</b><span>${ARROW(a.brg)}${cardinal(a.brg)}</span></div>
+    </header>
+    <div class="acft"><span>${esc(typeName(a))}</span>${tail && tail.replace(/-/g,'') !== flightLabel(a).replace(/[ -]/g,'') ? `<span class="tail">${esc(tail)}</span>` : ''}</div>
+    <dl class="stats">
+      ${statHTML('Altitude', altValue(a), vr)}
+      ${statHTML('Speed', a.gs != null ? (metric() ? `${Math.round(a.gs * 1.852)}<small> km/h</small>` : `${mph}<small> mph</small>`) : '—', a.gs != null && !metric() ? `${Math.round(a.gs)} kt` : '')}
+      ${statHTML('Heading', a.track != null ? `${Math.round(a.track)}°` : '—', a.track != null ? cardinal(a.track) : '')}
+    </dl>
+    ${progressHTML(a)}
+  </article>`;
+}
+
+function emptyHTML() {
+  const t = new Date();
+  let head = 'Clear skies overhead', body = `Nothing within ${fmtDist(cfg.radiusMi)} right now.`, actions = '';
+  if (locError && !here) {
+    head = 'Where are you?'; body = esc(locError);
+    actions = `<button class="pill" data-act="retryLoc" type="button">Try location again</button><button class="pill" data-act="settings" type="button">Set a fixed point</button>`;
+  } else if (!here) { head = 'Finding you…'; body = 'Waiting for your location.'; }
+  else if (state.needsRelay) {
+    head = 'Live data needs a relay';
+    body = 'The free ADS-B networks don’t let web pages read them directly. Add your relay address in Settings; the steps are in the project README.';
+    actions = `<button class="pill" data-act="settings" type="button">Open Settings</button><button class="pill" data-act="demo" type="button">Show demo</button>`;
+  } else if (state.error) {
+    head = 'Flight data is unavailable';
+    body = cfg.source === 'local' ? `Your receiver didn’t answer (${esc(state.error)}).` : `The data feed didn’t answer (${esc(state.error)}). Retrying every ${cfg.refreshSec} s.`;
+    actions = `<button class="pill" data-act="retry" type="button">Retry now</button>`;
+  } else if (!state.updated) { head = 'Looking up…'; body = 'Checking the sky around you.'; }
+  else if (state.last) body += ` Last seen: ${esc(state.last.name)} at ${new Date(state.last.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`;
+  return `<article class="card empty">
+    <div class="sweep" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="clock">${t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
+    <h2>${head}</h2><p>${body}</p>${actions ? `<div class="acts">${actions}</div>` : ''}
+  </article>`;
+}
+
+function tabsHTML() {
+  if (state.list.length < 2) return '';
+  return state.list.map(a => `<button class="tab${a.hex === state.selected ? ' on' : ''}" data-tab="${a.hex}" type="button" role="tab" aria-selected="${a.hex === state.selected}">${esc(flightLabel(a))}<span>${fmtDist(a.dist)}</span></button>`).join('');
+}
+
+/* drill-down sheet: photo, full route, everything else */
+function photoBlock(a) {
+  const p = enrich.photo.get(a.hex);
+  if (p && (p.large || p.thumb)) {
+    const who = p.by ? `© ${esc(p.by)}` : 'Photo';
+    const credit = p.link ? `<a href="${esc(p.link)}" target="_blank" rel="noopener">${who}</a> · ${esc(p.site)}` : `${who} · ${esc(p.site)}`;
+    return `<figure class="photo"><img src="${esc(p.large || p.thumb)}" alt="${esc(typeName(a))} ${esc(a.reg || '')}" onerror="this.parentNode.remove()"><figcaption>${credit}</figcaption></figure>`;
+  }
+  return '';
+}
+function detailHTML(a) {
+  const r = routeOf(a), e = enrich.ac.get(a.hex) || {};
+  const tail = a.reg || e.reg || '';
+  const f = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
   return `<div class="grab"></div>
-    <div class="hero">${enrich.photo.get(a.hex) ? photoHTML(a, 'large') : `<div class="ph">${silhouette(a)}</div>`}</div>
-    ${creditHTML(a) ? `<div class="credit">${creditHTML(a)}</div>` : ''}
-    <div class="dhead"><div><h2>${esc(label(a))}</h2><div class="sub">${esc([operator, typeName(a)].filter(Boolean).join(' · '))}</div></div>
-      <button class="iconbtn" data-act="close" aria-label="Close details" type="button"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    ${r && r.from ? `<div class="droute">
-      <div class="ap"><b>${esc(r.from.code)}</b><span>${esc(r.from.city || '')}</span><span>${esc(r.from.name || '')}</span></div>
-      <svg class="plane" viewBox="0 0 24 24" style="transform:rotate(90deg)"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
-      <div class="ap r"><b>${esc(r.to.code)}</b><span>${esc(r.to.city || '')}</span><span>${esc(r.to.name || '')}</span></div></div>` : ''}
+    <div class="dtop"><div><h2>${esc(flightLabel(a))}</h2><p>${esc([airlineName(a), typeName(a)].filter(Boolean).join(' · '))}</p></div>
+      <button class="close" data-act="close" aria-label="Close" type="button">✕</button></div>
+    ${photoBlock(a)}
+    ${r && r.from ? `<div class="droute"><div><b>${esc(r.from.code)}</b><span>${esc(r.from.name || r.from.city || '')}</span></div><div class="r"><b>${esc(r.to.code)}</b><span>${esc(r.to.name || r.to.city || '')}</span></div></div>` : ''}
     <dl class="facts">
-      ${fact('Altitude', fmtAlt(a) + trendArrow(a))}
-      ${fact('Vertical', fmtRate(a.vrate))}
-      ${fact('Speed', fmtSpd(a.gs))}
-      ${fact('Heading', a.track != null ? Math.round(a.track) + '°' : '—')}
-      ${fact('From you', `${fmtDist(a.dist)} ${cardinal(a.brg)}`)}
-      ${fact('Squawk', esc(a.squawk || '—'))}
-      ${fact('Registration', esc(reg || '—'))}
-      ${fact('Type code', esc(a.type || e.icaoType || '—'))}
-      ${fact('Mode S', esc(a.hex.toUpperCase()))}
+      ${f('Altitude', fmtAlt(a))}${f('Vertical rate', fmtRate(a.vrate))}${f('Ground speed', fmtSpd(a.gs))}
+      ${f('Heading', a.track != null ? Math.round(a.track) + '°' : '—')}${f('From you', `${fmtDist(a.dist)} ${cardinal(a.brg)}`)}${f('Squawk', esc(a.squawk || '—'))}
+      ${f('Registration', esc(tail || '—'))}${f('Type code', esc(a.type || e.icaoType || '—'))}${f('Callsign', esc(a.callsign || '—'))}
+      ${f('Operator', esc(airlineName(a) || '—'))}${f('Mode S hex', esc(a.hex.toUpperCase()))}${f('Data', esc(state.label || '—'))}
     </dl>
     <div class="links">
-      <a href="https://globe.airplanes.live/?icao=${a.hex}" target="_blank" rel="noopener">Track on map</a>
+      <a href="https://globe.airplanes.live/?icao=${a.hex}" target="_blank" rel="noopener">Live map</a>
       ${a.callsign ? `<a href="https://www.flightaware.com/live/flight/${encodeURIComponent(a.callsign)}" target="_blank" rel="noopener">FlightAware</a>` : ''}
-      ${reg ? `<a href="https://www.planespotters.net/search?q=${encodeURIComponent(reg)}" target="_blank" rel="noopener">More photos</a>` : ''}
+      ${tail ? `<a href="https://www.planespotters.net/search?q=${encodeURIComponent(tail)}" target="_blank" rel="noopener">Photos</a>` : ''}
     </div>
-    ${r && r.via !== 'demo' ? `<p class="fine">Route comes from a callsign database (${esc(r.via)}) and can be out of date for some flights.${r.plausible === false ? ' This one doesn’t match the aircraft’s position well.' : ''}</p>` : ''}`;
+    ${r && r.via !== 'demo' ? `<p class="fine">Route from a callsign database (${esc(r.via)}); occasionally out of date.</p>` : ''}`;
 }
 
+/* ---------- render ---------- */
+let rq;
+function scheduleRender() { if (!rq) rq = requestAnimationFrame(() => { rq = null; render(); }); }
 function render() {
   document.body.classList.toggle('kiosk', !!cfg.kiosk);
-  $('radiusLbl').textContent = fmtDist(cfg.radiusMi).replace('.0 ', ' ');
+  document.documentElement.classList.toggle('kiosk', !!cfg.kiosk);
+  document.body.dataset.sky = skyPhase();
+  if (!state.list.some(a => a.hex === state.selected)) state.selected = state.list[0]?.hex || null;
+  const a = state.list.find(x => x.hex === state.selected);
+  $('tabs').innerHTML = tabsHTML();
+  $('tabs').hidden = state.list.length < 2;
+  $('tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  $('stage').innerHTML = a ? cardHTML(a) : emptyHTML();
+  $('where').textContent = here ? `Within ${fmtDist(cfg.radiusMi).replace('.0 ', ' ')} of ${here.fixed ? 'your spot' : 'you'}` : 'Overhead';
   statusLine();
-  $('count').textContent = state.list.length ? `${state.list.length} aircraft` : '';
-  $('scope').innerHTML = here ? scopeSVG() + `<div class="legend">north up</div><div class="src">${here.fixed ? 'fixed point' : 'your location'}</div>` : '';
-  $('scope').hidden = !here;
-  $('notice').innerHTML = noticeHTML();
-  const max = cfg.kiosk ? 5 : 40;
-  $('strips').innerHTML = state.list.slice(0, max).map(stripHTML).join('');
-  if (cfg.kiosk) $('feature').innerHTML = featureHTML();
-  if (state.selected) {
-    const a = state.list.find(x => x.hex === state.selected);
-    if (a) $('sheetInner').innerHTML = detailHTML(a);
+  if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen); if (d) $('sheetInner').innerHTML = detailHTML(d); }
+}
+function statusLine() {
+  const el = $('status'); let txt = '', cls = '';
+  if (state.error || state.needsRelay) { cls = 'err'; txt = state.needsRelay ? 'Relay not set' : `${state.errorSource || 'Data'}: ${state.error}`; }
+  else if (state.updated) {
+    const age = Math.round((Date.now() - state.updated) / 1000);
+    if (age > cfg.refreshSec * 3) cls = 'stale';
+    txt = `${state.label} · ${age < 2 ? 'just now' : age + 's ago'}${state.list.length > 1 ? ` · ${state.list.length} aircraft` : ''}`;
   }
+  el.className = 'status ' + cls; el.innerHTML = txt ? `<span class="dot"></span>${esc(txt)}` : '';
 }
 
-/* ---------- interaction ---------- */
+/* ---------- interaction (read-only: pick a tab, open details) ---------- */
+let sheetOpen = null;
 function openDetail(hex) {
-  state.selected = hex;
   const a = state.list.find(x => x.hex === hex); if (!a) return;
-  if (!cfg.demo) {
-    want('ac', a.hex, () => lookupAircraft(a.hex));
-    if (a.callsign) want('route', a.callsign.toUpperCase(), () => lookupRoute(a));
-    want('photo', a.hex, () => lookupPhoto({ ...a, reg: a.reg || enrich.ac.get(a.hex)?.reg }));
-  }
+  sheetOpen = hex;
+  if (!cfg.demo) want('photo', a.hex, () => lookupPhoto({ ...a, reg: a.reg || enrich.ac.get(a.hex)?.reg }));
   $('sheetInner').innerHTML = detailHTML(a);
   $('sheet').classList.add('open'); $('scrim').classList.add('open'); $('sheet').setAttribute('aria-hidden', 'false');
-  render();
 }
 function closeDetail() {
-  state.selected = null;
+  sheetOpen = null;
   $('sheet').classList.remove('open'); $('scrim').classList.remove('open'); $('sheet').setAttribute('aria-hidden', 'true');
-  render();
 }
 document.addEventListener('click', ev => {
-  const s = ev.target.closest('[data-hex]');
-  if (s && !cfg.kiosk) { openDetail(s.dataset.hex); return; }
+  const tab = ev.target.closest('[data-tab]');
+  if (tab) { state.selected = tab.dataset.tab; userPicked = Date.now(); render(); return; }
   const act = ev.target.closest('[data-act]')?.dataset.act;
-  if (act === 'close') closeDetail();
-  if (act === 'settings') openSettings();
-  if (act === 'retry') poll(true);
-  if (act === 'retryLoc') { startLocation(); render(); }
-  if (act === 'demo') { cfg.demo = true; store(LS_KEY, cfg); poll(true); }
+  if (act === 'close') return closeDetail();
+  if (act === 'settings') return openSettings();
+  if (act === 'retry') return poll(true);
+  if (act === 'retryLoc') { startLocation(); render(); return; }
+  if (act === 'demo') { cfg.demo = true; store(LS_KEY, cfg); poll(true); return; }
+  const card = ev.target.closest('[data-open]');
+  if (card && !cfg.kiosk) openDetail(card.dataset.open);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && sheetOpen) closeDetail();
+  if (e.key === 'Enter' && document.activeElement?.dataset?.open) openDetail(document.activeElement.dataset.open);
 });
 $('scrim').addEventListener('click', closeDetail);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.selected) closeDetail(); });
 
 /* settings dialog */
 const dlg = $('settings');
@@ -589,16 +637,21 @@ $('settingsForm').addEventListener('submit', e => {
   poll(true);
 });
 
-/* kiosk extras: rotate featured aircraft, keep screen on, long-press corner for settings */
-setInterval(() => { if (cfg.kiosk && state.list.length > 1) { state.feature++; render(); } }, 12000);
-setInterval(() => { statusLine(); if (cfg.kiosk && !state.list.length) render(); }, 1000);
+/* kiosk: cycle through aircraft unless someone just picked one; keep the screen on */
+let userPicked = 0;
+setInterval(() => {
+  if (!cfg.kiosk || state.list.length < 2 || Date.now() - userPicked < 30000) return;
+  const i = state.list.findIndex(a => a.hex === state.selected);
+  state.selected = state.list[(i + 1) % state.list.length].hex; render();
+}, 10000);
+setInterval(() => { statusLine(); if (!state.list.length) render(); }, 1000);
 let lock;
 async function wake() { try { if ('wakeLock' in navigator && cfg.kiosk) lock = await navigator.wakeLock.request('screen'); } catch { /* not granted */ } }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && cfg.kiosk) wake(); });
 
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => { /* preview frames can't register; fine */ });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 startLocation();
 if (cfg.kiosk) wake();

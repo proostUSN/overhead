@@ -29,11 +29,19 @@ Allow location when asked. If you say no, open Settings (gear icon) and set a fi
 
 ## What you see
 
-- **Scope:** north-up view of the area around you with range rings. Each square is an aircraft; the line shows where it's heading. Green is climbing, amber is descending.
-- **Strips:** one per aircraft, nearest first: callsign, registration, route (origin → destination), aircraft type, altitude, speed, and distance and direction from you.
-- **Tap a strip** for a large photo, full route with airport names, and links to the live map and FlightAware.
+One card, like a weather widget, for the nearest aircraft within 5 miles:
 
-Altitudes at or above 18,000 ft show as flight levels (FL340 = 34,000 ft). Squawks 7500/7600/7700 are flagged in red.
+- **Airline logo** (or, for private aircraft, a badge with the manufacturer), **flight number**, and airline
+- **Aircraft type** and **tail number**
+- **Altitude, speed and heading**, with climb or descent rate
+- **Distance and direction** from you
+- **Origin → destination line** with the aircraft's position along it. The fill is green while climbing, blue in level flight, and amber while descending.
+
+When more than one aircraft is in range, a faint row of tabs across the top lets you switch between them. Tap the card for details: photo, full airport names, squawk, Mode S code, and links to the live map and FlightAware.
+
+The background follows the sun at your location: blue by day, warm at dawn and dusk, dark at night. With nothing in range, the card shows the time and the last aircraft seen.
+
+Airline logos load from public logo services (images.kiwi.com, FlightAware) by airline code. Logos are trademarks of their airlines; when one isn't available the card shows the airline's code instead.
 
 ## Settings
 
