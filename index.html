@@ -32,6 +32,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;min-height:100%;color:var(--ink);font:400 16px/1.35 var(--f-ui);background:#14224a var(--sky-night) fixed;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 body[data-sky="day"]{background:#4f93dc var(--sky-day) fixed}
@@ -191,6 +192,12 @@ dialog h2{margin:0;font-size:1.2rem}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .check{display:flex;align-items:center;gap:8px;font-size:.92rem}
 .actions{display:flex;justify-content:flex-end;gap:8px}
+.adv{border-top:1px solid rgba(255,255,255,.12);padding-top:10px}
+.adv summary{cursor:pointer;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);list-style:none;display:flex;align-items:center;gap:6px}
+.adv summary::-webkit-details-marker{display:none}
+.adv summary::before{content:"›";font-size:1rem;transition:transform .15s}
+.adv[open] summary::before{transform:rotate(90deg)}
+.advbody{display:flex;flex-direction:column;gap:14px;padding-top:14px}
 .btn{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);border-radius:999px;padding:8px 16px;font-weight:600}
 .btn.primary{background:#fff;color:#14203b;border-color:#fff}
 
@@ -234,48 +241,56 @@ body.kiosk .gear{opacity:.2}
   <form method="dialog" id="settingsForm" novalidate>
     <h2>Settings</h2>
     <div class="field">
-      <label for="s-source">Data source</label>
-      <select id="s-source">
-        <option value="auto">Free networks (automatic)</option>
-        <option value="airplaneslive">airplanes.live</option>
-        <option value="adsblol">adsb.lol</option>
-        <option value="adsbfi">adsb.fi</option>
-        <option value="local">My receiver (readsb / tar1090)</option>
-      </select>
-    </div>
-    <div class="field" id="f-relay">
-      <label for="s-relay">Relay address</label>
-      <input type="text" id="s-relay" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" placeholder="Shared relay (default)" autocomplete="off">
-      <span class="note">Leave empty to use the shared relay. Set your own if you run one (see nas/ in the project).</span>
-    </div>
-    <div class="field" id="f-local">
-      <label for="s-localUrl">Receiver aircraft.json URL</label>
-      <input type="text" id="s-localUrl" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" placeholder="/tar1090/data/aircraft.json">
-    </div>
-    <div class="field">
       <span class="lbl">Radius <span id="s-radiusVal"></span></span>
       <input type="range" id="s-radius" min="1" max="25" step="0.5" aria-label="Radius in miles">
-    </div>
-    <div class="field">
-      <span class="lbl">Refresh every <span id="s-refreshVal"></span></span>
-      <input type="range" id="s-refresh" min="5" max="60" step="1" aria-label="Refresh interval in seconds">
     </div>
     <div class="field">
       <label for="s-loc">Location</label>
       <select id="s-loc"><option value="gps">Follow my location</option><option value="fixed">Fixed point (patio, receiver)</option></select>
     </div>
-    <div class="two" id="f-fixed">
-      <div class="field"><label for="s-lat">Latitude</label><input type="number" id="s-lat" step="any" inputmode="decimal"></div>
-      <div class="field"><label for="s-lon">Longitude</label><input type="number" id="s-lon" step="any" inputmode="decimal"></div>
+    <div id="f-fixedwrap">
+      <div class="two" id="f-fixed">
+        <div class="field"><label for="s-lat">Latitude</label><input type="number" id="s-lat" step="any" inputmode="decimal"></div>
+        <div class="field"><label for="s-lon">Longitude</label><input type="number" id="s-lon" step="any" inputmode="decimal"></div>
+      </div>
+      <div style="margin-top:10px"><button type="button" class="btn" id="s-here">Use where I am now</button></div>
     </div>
-    <div><button type="button" class="btn" id="s-here">Use where I am now</button></div>
     <div class="field">
       <label for="s-units">Units</label>
       <select id="s-units"><option value="imperial">Feet, mph, miles</option><option value="metric">Metres, km/h, km</option></select>
     </div>
     <label class="check"><input type="checkbox" id="s-ground"> Include aircraft on the ground</label>
-    <label class="check"><input type="checkbox" id="s-kiosk"> Patio display mode</label>
-    <label class="check"><input type="checkbox" id="s-demo"> Demo traffic</label>
+    <details class="adv">
+      <summary>Advanced</summary>
+      <div class="advbody">
+        <div class="field">
+          <span class="lbl">Refresh every <span id="s-refreshVal"></span></span>
+          <input type="range" id="s-refresh" min="5" max="60" step="1" aria-label="Refresh interval in seconds">
+        </div>
+        <div class="field">
+          <label for="s-source">Data source</label>
+          <select id="s-source">
+            <option value="auto">Free networks (automatic)</option>
+            <option value="adsblol">adsb.lol</option>
+            <option value="adsbfi">adsb.fi</option>
+            <option value="airplaneslive">airplanes.live</option>
+            <option value="local">My receiver (readsb / tar1090)</option>
+          </select>
+        </div>
+        <div class="field" id="f-relay">
+          <label for="s-relay">Relay address</label>
+          <input type="text" id="s-relay" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" placeholder="Shared relay (default)" autocomplete="off">
+          <span class="note">Leave empty to use the shared relay.</span>
+        </div>
+        <div class="field" id="f-local">
+          <label for="s-localUrl">Receiver data address</label>
+          <input type="text" id="s-localUrl" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" placeholder="/tar1090/data/aircraft.json">
+          <span class="note">For your own antenna on a Raspberry Pi.</span>
+        </div>
+        <label class="check"><input type="checkbox" id="s-kiosk"> Patio display mode</label>
+        <label class="check"><input type="checkbox" id="s-demo"> Demo traffic</label>
+      </div>
+    </details>
     <div class="actions"><button type="button" class="btn" id="s-cancel">Cancel</button><button type="submit" class="btn primary">Save</button></div>
   </form>
 </dialog>

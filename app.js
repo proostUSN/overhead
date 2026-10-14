@@ -672,7 +672,7 @@ const dlg = $('settings');
 function syncSettingsVis() {
   $('f-local').hidden = $('s-source').value !== 'local';
   $('f-relay').hidden = $('s-source').value === 'local';
-  $('f-fixed').hidden = $('s-loc').value !== 'fixed';
+  $('f-fixedwrap').hidden = $('s-loc').value !== 'fixed';
   $('s-radiusVal').textContent = `${$('s-radius').value} mi`;
   $('s-refreshVal').textContent = `${$('s-refresh').value} s`;
 }
@@ -681,6 +681,8 @@ function openSettings() {
   $('s-radius').value = cfg.radiusMi; $('s-refresh').value = cfg.refreshSec;
   $('s-loc').value = cfg.locMode; $('s-lat').value = cfg.lat ?? ''; $('s-lon').value = cfg.lon ?? '';
   $('s-units').value = cfg.units; $('s-ground').checked = cfg.showGround; $('s-kiosk').checked = cfg.kiosk; $('s-demo').checked = cfg.demo;
+  // Open Advanced when something in it is switched on, so it's never hidden from view.
+  dlg.querySelector('.adv').open = !!(cfg.demo || cfg.kiosk || cfg.source !== 'auto' || (cfg.relay && cfg.relay !== DEFAULT_RELAY));
   syncSettingsVis();
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
 }
