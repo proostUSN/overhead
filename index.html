@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Overhead</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Aircraft passing overhead, from free ADS-B data.">
+<meta name="theme-color" content="#e9edf0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f161c" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Overhead">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: ATC flight-progress strips under a small north-up scope; kiosk = featured strip + scope side by side */
+:root{
+  --bg:#e9edf0; --surface:#f7f4ea; --surface-2:#eee9da; --ink:#17222b; --muted:#5b6872; --line:#c6ccd1;
+  --accent:#1f5fa8; --amber:#b5731a; --climb:#2b7553; --alert:#b3261e; --scope:#dfe5ea; --ring:#b9c3cb;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --gutter-l:max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r:max(16px, env(safe-area-inset-right, 0px));
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f161c; --surface:#1a232b; --surface-2:#212c35; --ink:#e3e8ec; --muted:#8d9aa5; --line:#2c3843;
+  --accent:#6fa8ea; --amber:#e3a74e; --climb:#62c192; --alert:#ef6b62; --scope:#131c23; --ring:#2b3945; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0f161c; --surface:#1a232b; --surface-2:#212c35; --ink:#e3e8ec; --muted:#8d9aa5; --line:#2c3843;
+  --accent:#6fa8ea; --amber:#e3a74e; --climb:#62c192; --alert:#ef6b62; --scope:#131c23; --ring:#2b3945; color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.4 var(--f-body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+
+.app{display:flex;flex-direction:column;min-height:100%;max-width:760px;margin:0 auto;padding-left:var(--gutter-l);padding-right:var(--gutter-r);padding-block:12px 24px;gap:14px}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:6px}
+.brand{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+.brand h1{margin:0;font:700 26px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase}
+.status{font:400 12px/1.2 var(--f-data);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--climb);margin-right:6px;vertical-align:1px}
+.status.stale .dot{background:var(--amber)} .status.err .dot{background:var(--alert)}
+.iconbtn{flex:none;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
+
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+/* scope */
+.scopewrap{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.scope{position:relative;background:var(--scope);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.scope svg{display:block;width:100%;height:auto;max-height:32vh}
+.scope .legend{position:absolute;left:10px;bottom:8px;font:400 11px var(--f-data);color:var(--muted)}
+.scope .src{position:absolute;right:10px;bottom:8px;font:400 11px var(--f-data);color:var(--muted)}
+.ring{fill:none;stroke:var(--ring);stroke-width:1}
+.ringlbl{fill:var(--muted);font:400 10px var(--f-data)}
+.card-n{fill:var(--muted);font:600 12px var(--f-display);letter-spacing:.08em}
+.me{fill:var(--accent)}
+.blip{cursor:pointer}
+.blip .b{fill:var(--ink)} .blip .t{stroke:var(--ink);stroke-width:1.6}
+.blip.climb .b{fill:var(--climb)} .blip.climb .t{stroke:var(--climb)}
+.blip.desc .b{fill:var(--amber)} .blip.desc .t{stroke:var(--amber)}
+.blip.sel .halo{fill:none;stroke:var(--accent);stroke-width:2}
+.blip text{fill:var(--ink);font:500 11px var(--f-data)}
+.trail{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3;opacity:.7}
+
+/* strips */
+.listhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.listhead h2{margin:0;font:600 13px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.listhead span{font:400 12px var(--f-data);color:var(--muted)}
+.strips{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.strip{display:grid;grid-template-columns:76px minmax(0,1fr) auto;background:var(--surface);border:1px solid var(--line);border-radius:3px;cursor:pointer;min-height:84px;text-align:left;width:100%;padding:0;color:inherit}
+.strip:hover{border-color:var(--muted)}
+.strip.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.strip .ph{position:relative;background:var(--surface-2);border-right:1px solid var(--line);overflow:hidden}
+.strip .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.strip .ph svg{position:absolute;inset:0;margin:auto;width:46px;height:46px;fill:var(--muted);opacity:.45}
+.strip .mid{padding:8px 10px;min-width:0;display:flex;flex-direction:column;gap:3px}
+.cs{display:flex;align-items:baseline;gap:8px;min-width:0}
+.cs b{font:700 21px/1 var(--f-display);letter-spacing:.04em}
+.cs .reg{font:400 12px var(--f-data);color:var(--muted)}
+.cs .sq{font:500 11px var(--f-data);color:#fff;background:var(--alert);padding:1px 5px;border-radius:3px}
+.route{font:600 15px/1.2 var(--f-display);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.route .arr{color:var(--muted);margin:0 4px}
+.route.none{color:var(--muted);font-weight:500}
+.type{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip .rt{border-left:1px solid var(--line);padding:8px 10px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;min-width:92px}
+.alt{font:500 17px/1 var(--f-data);font-variant-numeric:tabular-nums;white-space:nowrap}
+.alt.climb{color:var(--climb)} .alt.desc{color:var(--amber)}
+.alt small{font-size:11px;color:var(--muted)}
+.dist{font:400 12px var(--f-data);color:var(--muted);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.dist svg{width:13px;height:13px;fill:var(--accent)}
+.spd{font:400 12px var(--f-data);color:var(--muted)}
+
+/* empty / notice */
+.notice{background:var(--surface);border:1px dashed var(--line);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.notice h3{margin:0;font:600 18px var(--f-display);letter-spacing:.04em}
+.notice p{margin:0;color:var(--muted);max-width:60ch}
+.notice .row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+/* detail sheet */
+.sheet{position:fixed;inset:auto 0 0 0;z-index:20;background:var(--surface);border-top:1px solid var(--line);border-radius:16px 16px 0 0;max-height:88vh;overflow:auto;padding:0 var(--gutter-r) calc(18px + env(safe-area-inset-bottom,0px)) var(--gutter-l);transform:translateY(102%);transition:transform .25s ease;box-shadow:0 -10px 30px rgba(0,0,0,.18)}
+.sheet.open{transform:none}
+.scrim{position:fixed;inset:0;z-index:19;background:rgba(10,16,22,.35);opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.open{opacity:1;pointer-events:auto}
+.sheet .inner{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:10px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
+.hero{position:relative;border-radius:8px;overflow:hidden;background:var(--surface-2);aspect-ratio:16/9;max-width:100%}
+.hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hero .ph{position:absolute;inset:0;display:grid;place-items:center}
+.hero .ph svg{width:30%;fill:var(--muted);opacity:.35}
+.credit{font:400 11px var(--f-data);color:var(--muted)}
+.credit a{color:var(--accent)}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dhead h2{margin:0;font:700 34px/1 var(--f-display);letter-spacing:.04em}
+.dhead .sub{color:var(--muted);font-size:14px;margin-top:4px}
+.droute{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;border-block:1px solid var(--line);padding-block:12px}
+.ap b{display:block;font:700 30px/1 var(--f-display);letter-spacing:.05em}
+.ap span{display:block;font-size:13px;color:var(--muted);line-height:1.25}
+.ap.r{text-align:right}
+.droute .plane{width:26px;height:26px;fill:var(--accent)}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 10px;margin:0}
+.facts div{min-width:0}
+.facts dt{font:600 11px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.facts dd{margin:2px 0 0;font:500 15px var(--f-data);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{color:var(--accent);font-size:14px;text-decoration:none;border:1px solid var(--line);padding:6px 10px;border-radius:8px}
+.fine{font-size:12px;color:var(--muted);margin:0}
+
+/* settings */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:0;width:min(520px, calc(100vw - 32px));max-height:88vh}
+dialog::backdrop{background:rgba(10,16,22,.45)}
+dialog form{display:flex;flex-direction:column;gap:14px;padding:18px}
+dialog h2{margin:0;font:700 22px var(--f-display);letter-spacing:.05em;text-transform:uppercase}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label,.field .lbl{font:600 12px var(--f-display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.field input[type=text],.field input[type=number],.field input[type=url],.field select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 10px;width:100%}
+.field .hint{font-size:12px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check{display:flex;align-items:center;gap:8px}
+.rangeval{font:500 13px var(--f-data)}
+.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+
+/* kiosk (Pi patio display) */
+body.kiosk{cursor:none;font-size:17px}
+body.kiosk .app{max-width:none;height:100%;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:14px 18px;padding-block:12px}
+body.kiosk .top{grid-column:1 / -1;position:static}
+body.kiosk .top .brand{flex-direction:row;align-items:baseline;gap:12px}
+body.kiosk .top .brand h1{font-size:30px}
+body.kiosk #feature{display:flex}
+body.kiosk .side{display:flex;flex-direction:column;gap:12px;min-height:0}
+body.kiosk .scope svg{max-height:38vh}
+body.kiosk .strips{overflow:hidden}
+body.kiosk .strip{min-height:70px}
+body.kiosk #settingsBtn{opacity:.25}
+body.kiosk .scrim,body.kiosk .sheet{display:none}
+#feature{display:none;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.fx-hero{position:relative;flex:1;min-height:0;border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.fx-hero img{width:100%;height:100%;object-fit:cover;display:block}
+.fx-hero .ph{position:absolute;inset:0;display:grid;place-items:center}
+.fx-hero .ph svg{width:34%;fill:var(--muted);opacity:.3}
+.fx-hero .credit:empty{display:none}
+.fx-hero .credit{position:absolute;right:8px;bottom:6px;background:color-mix(in srgb,var(--bg) 75%,transparent);padding:2px 6px;border-radius:4px}
+.fx-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 18px;align-items:end}
+.fx-body .cs b{font-size:46px}
+.fx-body .route{font-size:28px}
+.fx-body .type{font-size:18px}
+.fx-body .alt{font-size:34px}
+.fx-body .rt{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.fx-body .dist{font-size:16px}
+.quiet{flex:1;display:grid;place-items:center;text-align:center;border:1px dashed var(--line);border-radius:10px;padding:20px}
+.quiet .clock{font:600 72px/1 var(--f-display);letter-spacing:.04em}
+.quiet p{color:var(--muted);margin:6px 0 0}
+
+@media (max-width:420px){ .strip{grid-template-columns:64px minmax(0,1fr) auto} .strip .rt{min-width:80px;padding-inline:8px} .facts{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (prefers-reduced-motion: reduce){ .sheet,.scrim{transition:none} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Overhead</h1>
+      <div class="status" id="status" role="status" aria-live="polite"><span class="dot"></span>Starting…</div>
+    </div>
+    <button class="iconbtn" id="settingsBtn" aria-label="Settings" type="button">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <section id="feature" aria-label="Featured aircraft"></section>
+
+  <div class="side">
+    <div class="scopewrap">
+      <div class="scope" id="scope"></div>
+    </div>
+    <div class="listhead"><h2>Within <span id="radiusLbl">5 mi</span></h2><span id="count"></span></div>
+    <div id="notice"></div>
+    <ul class="strips" id="strips"></ul>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" aria-label="Aircraft details" aria-hidden="true"><div class="inner" id="sheetInner"></div></section>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Settings</h2>
+    <div class="field">
+      <label for="s-source">Data source</label>
+      <select id="s-source">
+        <option value="auto">Automatic (free networks, with fallback)</option>
+        <option value="airplaneslive">airplanes.live</option>
+        <option value="adsblol">adsb.lol</option>
+        <option value="adsbfi">adsb.fi</option>
+        <option value="local">My receiver (readsb / tar1090)</option>
+      </select>
+    </div>
+    <div class="field" id="f-local">
+      <label for="s-localUrl">Receiver aircraft.json URL</label>
+      <input type="url" id="s-localUrl" placeholder="/tar1090/data/aircraft.json">
+      <span class="hint">On the Pi this is usually /tar1090/data/aircraft.json or http://localhost:8080/data/aircraft.json.</span>
+    </div>
+    <div class="field">
+      <span class="lbl">Radius <span class="rangeval" id="s-radiusVal"></span></span>
+      <input type="range" id="s-radius" min="1" max="25" step="0.5" aria-label="Radius in miles">
+    </div>
+    <div class="field">
+      <span class="lbl">Refresh every <span class="rangeval" id="s-refreshVal"></span></span>
+      <input type="range" id="s-refresh" min="5" max="60" step="1" aria-label="Refresh interval in seconds">
+    </div>
+    <div class="field">
+      <label for="s-loc">Location</label>
+      <select id="s-loc">
+        <option value="gps">Follow my phone's location</option>
+        <option value="fixed">Fixed point (patio, receiver)</option>
+      </select>
+    </div>
+    <div class="two" id="f-fixed">
+      <div class="field"><label for="s-lat">Latitude</label><input type="number" id="s-lat" step="any" inputmode="decimal"></div>
+      <div class="field"><label for="s-lon">Longitude</label><input type="number" id="s-lon" step="any" inputmode="decimal"></div>
+    </div>
+    <div class="row"><button type="button" class="btn" id="s-here">Use where I am now</button></div>
+    <div class="field">
+      <label for="s-units">Units</label>
+      <select id="s-units"><option value="imperial">Feet, knots, miles</option><option value="metric">Metres, km/h, km</option></select>
+    </div>
+    <label class="check"><input type="checkbox" id="s-ground"> Show aircraft on the ground</label>
+    <label class="check"><input type="checkbox" id="s-kiosk"> Patio display mode (large, auto-cycling)</label>
+    <label class="check"><input type="checkbox" id="s-demo"> Demo traffic (simulated aircraft)</label>
+    <div class="actions">
+      <button type="button" class="btn" id="s-cancel">Cancel</button>
+      <button type="submit" class="btn primary" id="s-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
