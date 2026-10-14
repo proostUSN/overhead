@@ -186,7 +186,7 @@ dialog form{display:flex;flex-direction:column;gap:14px;padding:20px}
 dialog h2{margin:0;font-size:1.2rem}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label,.field .lbl{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
-.field input[type=url],.field input[type=number],.field select{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);border-radius:10px;padding:9px 10px;width:100%;color:#fff;font:inherit}
+.field input[type=text],.field input[type=url],.field input[type=number],.field select{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);border-radius:10px;padding:9px 10px;width:100%;color:#fff;font:inherit}
 .field .note{font-size:.75rem;color:var(--ink-3)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .check{display:flex;align-items:center;gap:8px;font-size:.92rem}
@@ -231,7 +231,7 @@ body.kiosk .gear{opacity:.2}
 <section class="sheet" id="sheet" aria-label="Aircraft details" aria-hidden="true"><div class="inner" id="sheetInner"></div></section>
 
 <dialog id="settings">
-  <form method="dialog" id="settingsForm">
+  <form method="dialog" id="settingsForm" novalidate>
     <h2>Settings</h2>
     <div class="field">
       <label for="s-source">Data source</label>
@@ -245,12 +245,12 @@ body.kiosk .gear{opacity:.2}
     </div>
     <div class="field" id="f-relay">
       <label for="s-relay">Relay address</label>
-      <input type="url" id="s-relay" placeholder="Shared relay (default)" autocomplete="off">
+      <input type="text" id="s-relay" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" placeholder="Shared relay (default)" autocomplete="off">
       <span class="note">Leave empty to use the shared relay. Set your own if you run one (see nas/ in the project).</span>
     </div>
     <div class="field" id="f-local">
       <label for="s-localUrl">Receiver aircraft.json URL</label>
-      <input type="url" id="s-localUrl" placeholder="/tar1090/data/aircraft.json">
+      <input type="text" id="s-localUrl" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url" placeholder="/tar1090/data/aircraft.json">
     </div>
     <div class="field">
       <span class="lbl">Radius <span id="s-radiusVal"></span></span>
