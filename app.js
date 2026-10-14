@@ -463,6 +463,7 @@ function airlineName(a) {
   const r = routeOf(a), e = enrich.ac.get(a.hex);
   if (r?.airline) return r.airline;
   if (airlineOf(a)?.name) return airlineOf(a).name;
+  if (isAirline(a)) return '';          // airliners are often registered to banks/trustees; never show that as the airline
   if (a.op) return titleCase(a.op);
   if (!isAirline(a)) return isHeli(a) ? 'Helicopter' : (e?.owner ? titleCase(e.owner) : 'General aviation');
   return '';
