@@ -1,0 +1,69 @@
+# Overhead relay for Synology Container Manager (or any Docker host).
+# Paste this whole file into Container Manager → Project → Create → "Create docker-compose.yml".
+# The ONLY line to change is TS_AUTHKEY below.
+#
+# What runs:
+#   tailscale – gives the relay a private-to-public HTTPS address via Tailscale Funnel.
+#               No router ports are opened; nothing listens on your home network.
+#   relay     – ~150 lines of Node (nas/server.mjs) that forwards only to three flight-data sites.
+#               It runs inside Tailscale's network space on 127.0.0.1, so even devices on your
+#               own Wi-Fi can't reach it directly.
+#
+# Hardening: both containers drop every Linux capability and can't gain new privileges; the relay
+# runs as an unprivileged user on a read-only filesystem with small memory/process limits, and its
+# code is downloaded from a fixed commit and checked against a SHA-256 checksum before it runs.
+
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: overhead-tailscale
+    hostname: overhead-relay
+    environment:
+      TS_AUTHKEY: "PASTE-YOUR-TAILSCALE-AUTH-KEY-HERE"
+      TS_HOSTNAME: overhead-relay
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_SERVE_CONFIG: /tmp/serve.json
+    # Write the Funnel config (public HTTPS on 443 → relay on 127.0.0.1:8787), then start Tailscale.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printf '%s' '{"TCP":{"443":{"HTTPS":true}},"Web":{"$${TS_CERT_DOMAIN}:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:8787"}}}},"AllowFunnel":{"$${TS_CERT_DOMAIN}:443":true}}' > /tmp/serve.json
+        exec /usr/local/bin/containerboot
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    restart: unless-stopped
+
+  relay:
+    image: node:22-alpine
+    container_name: overhead-relay
+    network_mode: service:tailscale
+    depends_on: [tailscale]
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      HOST: 127.0.0.1
+      PORT: "8787"
+      ALLOWED_ORIGINS: https://proostusn.github.io
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        wget -qO /tmp/server.mjs https://raw.githubusercontent.com/proostUSN/overhead/0a51fdc67e28c331206cf917b00a20078a4e8d5b/nas/server.mjs
+        echo "6cad8320c5668f0334843cd933f0374ed1c8ba3baed0eed1a6f202d83e238233  /tmp/server.mjs" | sha256sum -c -
+        exec node /tmp/server.mjs
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    pids_limit: 64
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:
