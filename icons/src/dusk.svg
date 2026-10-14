@@ -3,10 +3,13 @@
 <clipPath id="c"><rect width="1024" height="1024" rx="228"/></clipPath></defs>
 <g clip-path="url(#c)">
 <rect width="1024" height="1024" fill="url(#g)"/>
-<circle cx="512" cy="905" r="230" fill="#ffd09a" opacity=".35"/>
+<ellipse cx="512" cy="980" rx="420" ry="200" fill="#ffd09a" opacity=".28"/>
 <ellipse cx="512" cy="1010" rx="700" ry="140" fill="rgba(20,22,48,.35)"/>
-<path d="M170.0 720.0 L179.7 704.1 L189.3 688.7 L199.0 673.7 L208.6 659.2 L218.3 645.2 L228.0 631.6 L237.6 618.4 L247.3 605.7 L257.0 593.5 L266.6 581.7 L276.3 570.4 L285.9 559.5 L295.6 549.1 L305.3 539.1 L314.9 529.6 L324.6 520.6 L334.2 512.0 L343.9 503.8 L353.6 496.2 L363.2 488.9 L372.9 482.2 L382.6 475.8 L392.2 470.0 L401.9 464.5 L411.5 459.6 L421.2 455.1 L430.9 451.0 L440.5 447.4 L450.2 444.3 L459.8 441.6 L469.5 439.4 L479.2 437.6 L488.8 436.3 L498.5 435.4 L508.2 435.0 L517.8 435.1 L527.5 435.6 L537.1 436.5 L546.8 438.0 L556.5 439.8" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" opacity=".9"/>
-<path d="M614.6 460.7 L620.6 463.7 L626.6 467.0 L632.6 470.4 L638.5 474.0 L644.5 477.8 L650.5 481.7 L656.5 485.9 L662.5 490.2 L668.5 494.7 L674.5 499.3 L680.4 504.1 L686.4 509.1 L692.4 514.3 L698.4 519.7 L704.4 525.2 L710.4 530.9 L716.3 536.7 L722.3 542.8 L728.3 549.0 L734.3 555.4 L740.3 562.0 L746.3 568.7 L752.3 575.6 L758.2 582.7 L764.2 590.0 L770.2 597.5 L776.2 605.1 L782.2 612.9 L788.2 620.8 L794.2 629.0 L800.1 637.3 L806.1 645.8 L812.1 654.5 L818.1 663.3 L824.1 672.3 L830.1 681.5 L836.0 690.9 L842.0 700.4 L848.0 710.1 L854.0 720.0" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-dasharray="2 34" opacity=".75"/>
+<line x1="170" y1="430" x2="530" y2="430" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+<line x1="680" y1="430" x2="820" y2="430" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-dasharray="2 36" opacity=".85"/>
+<circle cx="170" cy="430" r="26" fill="#ffffff"/>
+<circle cx="854" cy="430" r="22" fill="none" stroke="#ffffff" stroke-width="12" opacity=".95"/>
+<g transform="translate(600 430) rotate(90) scale(6.4) translate(-12 -12)"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="#ffffff"/></g>
 <g>
   <rect x="402" y="712" width="220" height="176" fill="#1f2347"/>
   <path d="M372 724 L512 600 L652 724 Z" fill="#1f2347" stroke="#1f2347" stroke-width="16" stroke-linejoin="round"/>
@@ -14,5 +17,4 @@
   <rect x="432" y="752" width="64" height="56" rx="6" fill="#ffcf6b"/>
   <rect x="528" y="784" width="58" height="104" rx="6" fill="#14172f"/>
 </g>
-<g transform="translate(580.4 446.4) rotate(108.4) scale(6.2) translate(-12 -12)"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="#ffffff"/></g>
 </g></svg>
