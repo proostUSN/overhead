@@ -164,7 +164,7 @@ async function getTraffic(lat, lon) {
 }
 
 /* ---------- enrichment: routes, aircraft records, photos ---------- */
-const CACHE_KEY = 'overhead.cache.v3'; // bumped: drop routes cached from the older source
+const CACHE_KEY = 'overhead.cache.v4'; // bumped: drop routes cached from the older source
 const enrich = { route: new Map(), ac: new Map(), photo: new Map(), airline: new Map(), pending: new Set(), queue: [] };
 (function loadCache() {
   const c = store(CACHE_KEY); if (!c) return;
@@ -209,7 +209,12 @@ async function lookupRoute(a) {
   return null;
 }
 
+// Corrections where the airline database is out of date (codes reassigned to a newer airline).
+const AIRLINE_FIXES = {
+  SCW: { name: 'SkyWest Charter', iata: '', icao: 'SCW' },   // listed as Malmö Aviation, a defunct Swedish airline
+};
 async function lookupAirline(icao) {
+  if (AIRLINE_FIXES[icao]) return AIRLINE_FIXES[icao];
   try {
     const j = await fetchJSON(`https://api.adsbdb.com/v0/airline/${encodeURIComponent(icao)}`);
     const x = Array.isArray(j?.response) ? j.response[0] : j?.response;
