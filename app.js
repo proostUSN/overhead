@@ -1,4 +1,4 @@
-/* Overhead — aircraft near you from free ADS-B networks or your own receiver.
+/* Spot-Air — aircraft near you from free ADS-B networks or your own receiver.
    No build step. Works as a PWA on a phone and as a kiosk page on a Raspberry Pi. */
 (() => {
 'use strict';
@@ -104,6 +104,7 @@ function titleCase(s) { return s.toLowerCase().replace(/\b([a-z])/g, m => m.toUp
 const isHeli = a => a.category === 'A7' || /^(R22|R44|R66|EC|AS|B06|B407|B412|S76|A139|H60)/.test(a.type || '');
 
 /* ---------- data sources ---------- */
+let skyRangeMi = 0;                 // the sky view asks for a wider area (10 mi) while it's open
 // Your exact position never leaves the phone: queries use a point rounded to 0.01° (under a mile),
 // with the search circle widened to cover the difference; exact distances are worked out on the device.
 const nmFor = mi => Math.min(250, Math.max(1, Math.ceil(mi / MI_PER_NM) + 2));
@@ -155,7 +156,7 @@ async function getTraffic(lat, lon) {
     const src = SOURCES[key];
     if (!src) continue;
     try {
-      const raw = await fetchJSON(src.url(lat, lon, cfg.radiusMi));
+      const raw = await fetchJSON(src.url(lat, lon, Math.max(cfg.radiusMi, skyRangeMi)));
       if (cfg.source === 'auto') autoIdx = (autoIdx + i) % keys.length; // stick with what works
       return { list: normalize(raw), label: src.label };
     } catch (e) { lastErr = e; lastErr.source = src.label; }
@@ -719,7 +720,7 @@ function render() {
   $('tabs').hidden = !cfg.kiosk || state.list.length < 2;
   $('tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   $('stage').innerHTML = !state.list.length ? emptyHTML() : cfg.kiosk ? cardHTML(a) : state.list.map(cardHTML).join('');
-  $('where').textContent = here ? `Within ${fmtDist(cfg.radiusMi).replace('.0 ', ' ')} of ${here.fixed ? 'your spot' : 'you'}` : 'Overhead';
+  $('where').textContent = here ? `Within ${fmtDist(cfg.radiusMi).replace('.0 ', ' ')} of ${here.fixed ? 'your spot' : 'you'}` : 'Spot-Air';
   statusLine();
   if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen); if (d) $('sheetInner').innerHTML = detailHTML(d); }
 }
@@ -831,6 +832,7 @@ window.overheadDebug = () => ({ list: state.list.map(a => ({ cs: a.callsign, hex
 window.Overhead = {
   get here() { return here; }, get list() { return state.list; }, get all() { return state.all || state.list; },
   get updated() { return state.updated; }, get metric() { return metric(); }, get kiosk() { return !!cfg.kiosk; },
+  setSkyRange(mi) { skyRangeMi = mi; poll(true); },
   distMi, bearing, sunPos, moonPos, skyPhase, flightLabel, typeName, openDetail, routeOf,
 };
 

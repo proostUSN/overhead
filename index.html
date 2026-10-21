@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Overhead</title>
+<title>Spot-Air</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="What's flying overhead right now, from free ADS-B data.">
 <meta name="theme-color" content="#1b2a52">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Overhead">
+<meta name="apple-mobile-web-app-title" content="Spot-Air">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -96,6 +96,10 @@ body[data-sky="dusk"] .clouds span{background:radial-gradient(ellipse,rgba(255,2
 #ar{position:fixed;inset:0;z-index:15;background:#0d1a3c;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
 #ar video,#ar canvas{position:absolute;inset:0;width:100%;height:100%}
 #ar video{object-fit:cover}
+#ar-ui{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;transform-origin:50% 50%;transition:transform .25s ease}
+#ar-ui.turned .ar-top{padding:14px 16px}
+#ar-ui.turned .ar-hint{bottom:16px}
+@media (prefers-reduced-motion: reduce){#ar-ui{transition:none}}
 .ar-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top,0px)) var(--gutter-r) 10px var(--gutter-l);background:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,0));pointer-events:none}
 .ar-close{pointer-events:auto;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:1.1rem;flex:none}
 .ar-read{display:flex;flex-direction:column;min-width:0;text-shadow:0 1px 3px rgba(0,0,0,.5)}
@@ -245,7 +249,7 @@ body.kiosk .gear{opacity:.2}
 </div>
 <div class="app">
   <header class="top">
-    <div class="loc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span id="where">Overhead</span></div>
+    <div class="loc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span id="where">Spot-Air</span></div>
     <div class="topbtns"><button class="skybtn" id="skyBtn" type="button" aria-label="Point at the sky"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M17 10.5v-1l-4-2.5V4.8a.8.8 0 0 0-1.6 0V7L7.4 9.5v1l4-1.2v2.6l-1 .8V13l1.8-.5L14 13v-.8l-1-.8V9.3z" fill="currentColor" stroke="none" transform="translate(-.2 3.2)"/></svg><span>Sky</span></button>
     <button class="gear" id="settingsBtn" aria-label="Settings" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
   </header>
@@ -258,11 +262,13 @@ body.kiosk .gear{opacity:.2}
 <section id="ar" hidden aria-label="Sky view">
   <video id="ar-video" playsinline muted autoplay hidden></video>
   <canvas id="ar-canvas"></canvas>
+  <div id="ar-ui">
   <div class="ar-top">
     <button class="ar-close" id="ar-close" type="button" aria-label="Close sky view">✕</button>
     <div class="ar-read"><b id="ar-facing">Starting…</b><span id="ar-count"></span></div>
   </div>
   <div class="ar-hint" id="ar-hint">Point your phone at the sky.</div>
+  </div>
 </section>
 <div class="scrim" id="scrim"></div>
 <section class="sheet" id="sheet" aria-label="Aircraft details" aria-hidden="true"><div class="inner" id="sheetInner"></div></section>

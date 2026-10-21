@@ -1,4 +1,4 @@
-/* Overhead sky view: point the phone at the sky and see each aircraft where it really is.
+/* Spot-Air sky view: point the phone at the sky and see each aircraft where it really is.
    Uses the camera, the compass/tilt sensors, and the same live data as the cards.
    World frame: x = east, y = north, z = up. */
 (() => {
@@ -79,6 +79,7 @@ function currentBasis() {
 }
 
 /* ---------- projection ---------- */
+const SKY_RANGE_MI = 10;                              // the sky view shows aircraft out to 10 miles
 const LONG_FOV = 62;                                    // phone main camera, along the screen's long side
 let W = 0, H = 0, DPR = 1, FPX = 1;
 function project(v, B) {
@@ -108,6 +109,21 @@ function skyPoint(here, p) {
   const range = Math.hypot(dM, hM);
   return { az, el, dM, range };
 }
+// Closing, at its closest, or moving away: time until the closest point of approach (3D, straight-line).
+function closure(here, p, a) {
+  if (a.gs == null || a.track == null) return 'near';
+  const pE = (p.lon - here.lon) * M_PER_DEG * Math.cos(rad(here.lat)), pN = (p.lat - here.lat) * M_PER_DEG;
+  const pU = (p.alt ?? 0) * 0.3048 - (here.altM || 0);
+  const g = a.gs * 0.514444, vE = g * Math.sin(rad(a.track)), vN = g * Math.cos(rad(a.track)), vU = (a.vrate || 0) * 0.00508;
+  const v2 = vE * vE + vN * vN + vU * vU;
+  if (v2 < 4) return 'near';                                     // hovering or very slow
+  const t = -(pE * vE + pN * vN + pU * vU) / v2;                  // seconds until closest
+  // "At its closest" while the current distance is within ~8% of the closest it will get.
+  const r = Math.hypot(pE, pN, pU), c = Math.hypot(pE + vE * t, pN + vN * t, pU + vU * t);
+  if (r - c < 0.08 * r) return 'near';
+  return t > 0 ? 'closing' : 'away';
+}
+const HALO = { closing: '61,220,132', near: '255,176,32', away: '255,90,79' };
 // How the aircraft is moving relative to you: toward, away, or crossing left/right.
 function aspect(sp, a) {
   if (a.track == null) return '';
@@ -162,7 +178,7 @@ function buildMesh(kind) {
     return { faces, tips };
   }
   const h = c.fw / 2, y0 = c.y0, y1 = c.y1;
-  lathe([y0, y0 + c.fw * 0.35, y0 + c.fw * 1.4, y1 - 4.5, y1 - 1.6, y1], [0.08, h * 0.72, h, h, h * 0.55, h * 0.22]);
+  lathe([y0, y0 + c.fw * 0.15, y0 + c.fw * 0.4, y0 + c.fw * 0.8, y0 + c.fw * 1.4, y1 - 4.5, y1 - 2.6, y1 - 1.2, y1], [0.08, h * 0.5, h * 0.78, h * 0.93, h, h, h * 0.78, h * 0.5, h * 0.22], 12, 0, 16);
   const wz = (wingZ[kind] ?? -0.35) * h;
   const wing = ([y, rc, span, sweep, tc], z, dihedral, part) => {
     for (const sg of [1, -1]) quad([B(12 + sg * h * 0.85, y, z), B(12 + sg * span, y + sweep, z + span * dihedral), B(12 + sg * span, y + sweep + tc, z + span * dihedral), B(12 + sg * h * 0.85, y + rc, z)], part);
@@ -199,7 +215,11 @@ function drawModel(kind, a, sx, sy, sizePx, los, B, T, light, now) {
   const M = meshFor(kind), A = attitude(a), k = sizePx / 24;
   let up = add(B.u, scale(los, -dot(B.u, los))); up = unit(up);
   const right = cross(los, up);
-  const toScreen = w => [sx + dot(w, right) * k, sy - dot(w, up) * k, dot(w, los)];
+  const D = 64;                                                      // mild perspective for depth
+  const toScreen = w => { const d = dot(w, los), ps = D / (D + d); return [sx + dot(w, right) * k * ps, sy - dot(w, up) * k * ps, d]; };
+  // Studio-style key light from the viewer's upper left, so curves always read as 3D, plus the real sun.
+  const key = unit(add(add(scale(los, -0.75), scale(up, 0.55)), scale(right, -0.4)));
+  const half = unit(add(key, scale(los, -1)));
   const polys = [];
   for (const f of M.faces) {
     if (f.blades) {                                                  // spinning rotor blades
@@ -218,16 +238,17 @@ function drawModel(kind, a, sx, sy, sizePx, los, B, T, light, now) {
   }
   polys.sort((p, q) => q.depth - p.depth);                         // painter's algorithm: far faces first
   const base = T.phase === 'day' ? [236, 241, 248] : T.phase === 'dusk' ? [214, 206, 214] : [150, 166, 196];
-  const amb = T.phase === 'night' ? 0.62 : 0.5;
+  const night3d = T.phase === 'night';
   // Outline pass so the model stands out against bright or dark sky.
-  ctx.lineJoin = 'round'; ctx.strokeStyle = T.planeEdge; ctx.lineWidth = 2.6;
+  ctx.lineJoin = 'round'; ctx.strokeStyle = T.planeEdge; ctx.lineWidth = 2.2;
   for (const p of polys) { if (p.part !== 'skin') continue; ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.stroke(); }
   for (const p of polys) {
     let n = p.n; if (dot(n, los) > 0) n = scale(n, -1);             // the side facing you
-    const b = Math.min(1.08, amb + (1 - amb) * Math.max(0, dot(n, light)) + 0.22 * Math.max(0, -n[2]));   // + light bounced up from the ground
+    const diffuse = (night3d ? 0.34 : 0.24) + 0.5 * Math.max(0, dot(n, key)) + 0.3 * Math.max(0, dot(n, light)) + 0.12 * Math.max(0, -n[2]);
+    const spec = p.part === 'skin' ? 0.45 * Math.pow(Math.max(0, dot(n, half)), 28) : 0;
     ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
     if (p.part === 'rotor' || p.part === 'prop') { ctx.fillStyle = T.phase === 'day' ? 'rgba(40,50,70,.18)' : 'rgba(220,230,255,.16)'; ctx.fill(); continue; }
-    const col = p.part === 'blade' ? base.map(v => Math.round(v * 0.45)) : base.map(v => Math.round(Math.min(255, v * b)));
+    const col = p.part === 'blade' ? base.map(v => Math.round(v * 0.45)) : base.map(v => Math.round(Math.min(255, v * Math.min(1.1, diffuse) + 255 * spec)));
     ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; ctx.fill();
     ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke();                         // hide seams
   }
@@ -257,6 +278,7 @@ const CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 /* ---------- rendering ---------- */
 let canvas, ctx, video, raf = 0, running = false, cameraOn = false, markers = [], hintSince = 0;
+let roll = 0, rollQ = 0;               // text tilt to stay level with the horizon; HUD turns in 90° steps
 function resize() {
   DPR = Math.min(2, window.devicePixelRatio || 1);
   W = canvas.clientWidth; H = canvas.clientHeight;
@@ -311,7 +333,7 @@ function drawGrid(B, T) {
     ctx.stroke();
     if (el) {
       const p = project(fromAzEl(deg(Math.atan2(B.f[0], B.f[1])) + 8, el), B);
-      if (onScreen(p)) { ctx.font = '600 14px -apple-system,system-ui,sans-serif'; ctx.fillStyle = T.soft; ctx.fillText(`${el}°`, p.x + 5, p.y - 5); }
+      if (onScreen(p)) leveled(p.x, p.y, () => { ctx.font = '600 14px -apple-system,system-ui,sans-serif'; ctx.fillStyle = T.soft; ctx.fillText(`${el}°`, 5, -5); });
     }
   }
   ctx.setLineDash([]);
@@ -319,7 +341,7 @@ function drawGrid(B, T) {
   for (let i = 0; i < 8; i++) {
     const p = project(fromAzEl(i * 45, 0), B);
     if (!onScreen(p)) continue;
-    ctx.fillStyle = T.line; ctx.fillText(CARD[i], p.x, p.y - 10);
+    leveled(p.x, p.y, () => { ctx.font = '800 18px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = T.line; ctx.fillText(CARD[i], 0, -10); });
     ctx.beginPath(); ctx.moveTo(p.x, p.y - 4); ctx.lineTo(p.x, p.y + 4); ctx.stroke();
   }
   ctx.textAlign = 'left';
@@ -333,7 +355,7 @@ function drawSunMoon(B, T, here) {
     g.addColorStop(0, 'rgba(255,250,225,.95)'); g.addColorStop(0.25, 'rgba(255,230,160,.55)'); g.addColorStop(1, 'rgba(255,210,120,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sp.x, sp.y, rS * 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fffbe8'; ctx.beginPath(); ctx.arc(sp.x, sp.y, rS * 0.6, 0, Math.PI * 2); ctx.fill();
-    if (onScreen(sp, -20)) label(sp.x, sp.y + rS + 18, 'Sun · don’t look directly', T, true);
+    if (onScreen(sp, -20)) label(sp.x, sp.y, rS + 18, 'Sun · don’t look directly', T, true);
   }
   const mp = project(fromAzEl(moon.az, moon.alt), B);
   if (moon.alt > -1 && onScreen(mp, 40)) {
@@ -348,15 +370,18 @@ function drawSunMoon(B, T, here) {
     const off = (moon.waxing ? -1 : 1) * moon.lit * 2 * r;
     ctx.beginPath(); ctx.arc(mp.x + off, mp.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    if (onScreen(mp, -20)) label(mp.x, mp.y + r + 18, `Moon · ${Math.round(moon.lit * 100)}% lit`, T, true);
+    if (onScreen(mp, -20)) label(mp.x, mp.y, r + 18, `Moon · ${Math.round(moon.lit * 100)}% lit`, T, true);
   }
 }
-function label(x, y, text, T, small) {
-  ctx.font = `${small ? 600 : 700} ${small ? 14 : 16}px -apple-system,system-ui,sans-serif`;
-  const w = ctx.measureText(text).width + 18, h = small ? 24 : 28;
-  ctx.fillStyle = T.pill; roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.fill();
-  ctx.fillStyle = T.pillInk; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5);
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+// Draw with the text kept level with the horizon, anchored at (x, y).
+function leveled(x, y, fn) { ctx.save(); ctx.translate(x, y); ctx.rotate(roll); fn(); ctx.restore(); }
+function label(x, y, dy, text, T, small) {
+  leveled(x, y, () => {
+    ctx.font = `${small ? 600 : 700} ${small ? 14 : 16}px -apple-system,system-ui,sans-serif`;
+    const w = ctx.measureText(text).width + 18, h = small ? 24 : 28;
+    ctx.fillStyle = T.pill; roundRect(-w / 2, dy - h / 2, w, h, h / 2); ctx.fill();
+    ctx.fillStyle = T.pillInk; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 0, dy + 0.5);
+  });
 }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
@@ -367,7 +392,7 @@ function drawAircraft(B, T, here, now) {
   markers = [];
   const sun = O.sunPos(here.lat, here.lon, new Date(now));
   const light = sun.alt > 0 ? fromAzEl(sun.az, sun.alt) : unit([0.3, 0.2, 1]);
-  const list = O.all.filter(a => a.lat != null && a.alt != null);
+  const list = O.all.filter(a => a.lat != null && a.alt != null && O.distMi(here.lat, here.lon, a.lat, a.lon) <= SKY_RANGE_MI);
   const items = list.map(a => {
     const p = extrapolate(a, now), sp = skyPoint(here, p);
     return { a, p, sp, v: fromAzEl(sp.az, sp.el) };
@@ -378,6 +403,11 @@ function drawAircraft(B, T, here, now) {
     if (!onScreen(s, 10)) { edge.push({ it, s }); continue; }
     const kind = classOf(it.a);
     const size = Math.max(72, Math.min(170, 6400 / Math.sqrt(it.sp.range))) * CLASSES[kind].scale;
+    // Subtle halo: green closing, amber at its closest, red moving away.
+    const hc = HALO[closure(here, it.p, it.a)], hr = size * 0.78;
+    const hg = ctx.createRadialGradient(s.x, s.y, size * 0.12, s.x, s.y, hr);
+    hg.addColorStop(0, `rgba(${hc},${T.phase === 'day' ? 0.42 : 0.5})`); hg.addColorStop(0.6, `rgba(${hc},${T.phase === 'day' ? 0.2 : 0.26})`); hg.addColorStop(1, `rgba(${hc},0)`);
+    ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(s.x, s.y, hr, 0, Math.PI * 2); ctx.fill();
     drawModel(kind, it.a, s.x, s.y, size, it.v, B, T, light, now);
     // Label below the aircraft.
     const name = O.flightLabel(it.a);
@@ -389,45 +419,73 @@ function drawAircraft(B, T, here, now) {
     ctx.font = '500 14.5px -apple-system,system-ui,sans-serif';
     const w2 = Math.max(ctx.measureText(line2).width, ctx.measureText(typ).width, asp ? ctx.measureText(asp).width : 0);
     const bw = Math.max(w1, w2) + 22, bh = asp ? 86 : 68;
-    const bx = Math.max(8, Math.min(W - bw - 8, s.x - bw / 2));
-    let by = s.y + size * 0.55 + 8;
-    if (by + bh > H - 70) by = s.y - size * 0.55 - 8 - bh;           // near the bottom: put the label above
-    const tx = bx + bw / 2;
-    ctx.fillStyle = T.pill; roundRect(bx, by, bw, bh, 11); ctx.fill();
-    ctx.fillStyle = T.pillInk; ctx.textAlign = 'center';
-    ctx.font = '700 18px -apple-system,system-ui,sans-serif'; ctx.fillText(name, tx, by + 21);
-    ctx.font = '500 14.5px -apple-system,system-ui,sans-serif'; ctx.globalAlpha = 0.9;
-    ctx.fillText(typ, tx, by + 40); ctx.fillText(line2, tx, by + 58);
-    if (asp) ctx.fillText(asp, tx, by + 76);
-    ctx.globalAlpha = 1; ctx.textAlign = 'left';
-    markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.6, box: [bx, by, bw, bh] });
+    // Put the box below the aircraft (in the leveled frame), or above it if that would run off screen.
+    let off = size * 0.55 + 8;
+    const at = d => [s.x - Math.sin(roll) * d, s.y + Math.cos(roll) * d];
+    const [cxB, cyB] = at(off + bh / 2);
+    const hx = rollQ % 2 ? bh / 2 : bw / 2, hy = rollQ % 2 ? bw / 2 : bh / 2, M = margins(false);
+    if (cxB - hx < M.left - 26 || cxB + hx > W - M.right + 26 || cyB - hy < M.top - 26 || cyB + hy > H - M.bottom + 26) off = -(size * 0.55 + 8) - bh;
+    let shift = 0;
+    if (Math.abs(roll) < 0.3) shift = Math.max(8 - (s.x - bw / 2), Math.min(0, W - 8 - (s.x + bw / 2)));
+    leveled(s.x, s.y, () => {
+      ctx.fillStyle = T.pill; roundRect(shift - bw / 2, off, bw, bh, 11); ctx.fill();
+      ctx.fillStyle = T.pillInk; ctx.textAlign = 'center';
+      ctx.font = '700 18px -apple-system,system-ui,sans-serif'; ctx.fillText(name, shift, off + 21);
+      ctx.font = '500 14.5px -apple-system,system-ui,sans-serif'; ctx.globalAlpha = 0.9;
+      ctx.fillText(typ, shift, off + 40); ctx.fillText(line2, shift, off + 58);
+      if (asp) ctx.fillText(asp, shift, off + 76);
+      ctx.globalAlpha = 1;
+    });
+    const [lx, ly] = at(off + bh / 2);
+    const bx = lx + shift - bw / 2, by = ly - bh / 2;
+    markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.6, box: [bx, by, bw, bh], lc: [lx + shift, ly], lr: Math.max(bw, bh) / 2 });
   }
   // Off-screen aircraft: arrows on the edge pointing the way to turn.
   edge.sort((x, y) => x.it.sp.range - y.it.sp.range);
   const placed = [];
-  for (const { it, s } of edge.slice(0, 6)) {
+  for (const { it, s } of edge.slice(0, 5)) {
     let dx = s.cx, dy = -s.cy;
     if (s.z <= 0.02 && Math.hypot(dx, dy) < 0.05) dy = 1;      // directly behind: suggest turning around
-    const ang = Math.atan2(dy, dx), m = 34, top = 96, bottom = H - 96, cy0 = (top + bottom) / 2;
-    const kx = (W / 2 - m) / Math.abs(Math.cos(ang) || 1e-6), ky = ((bottom - top) / 2) / Math.abs(Math.sin(ang) || 1e-6);
-    const k = Math.min(kx, ky), ex = W / 2 + Math.cos(ang) * k;
+    const ang = Math.atan2(dy, dx), M = margins();
+    const cx0 = (M.left + W - M.right) / 2, cy0 = (M.top + H - M.bottom) / 2;
+    const kx = ((W - M.left - M.right) / 2) / Math.abs(Math.cos(ang) || 1e-6), ky = ((H - M.top - M.bottom) / 2) / Math.abs(Math.sin(ang) || 1e-6);
+    const k = Math.min(kx, ky), ex = cx0 + Math.cos(ang) * k;
     let ey = cy0 + Math.sin(ang) * k;
-    for (const q of placed) if (Math.abs(q.x - ex) < 90 && Math.abs(q.y - ey) < 58) ey += ey > cy0 ? -60 : 60;
-    placed.push({ x: ex, y: ey });
-    ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+    // Spread arrows along their edge so labels don't overlap (turned labels run along the edge).
+    const ext = rollQ % 2 ? { x: 40, y: 170 } : { x: 175, y: 60 };
+    const vertEdge = Math.abs(Math.cos(ang)) * (H - M.top - M.bottom) > Math.abs(Math.sin(ang)) * (W - M.left - M.right);
+    let ex2 = ex;
+    const inward = rollQ % 2 ? [40, 90] : [90, 40];
+    const lblAt = (x, y) => { let lx = x - Math.cos(ang) * inward[0], ly = y - Math.sin(ang) * inward[1];
+      if (rollQ % 2) ly = Math.max(95, Math.min(H - 95, ly)); else lx = Math.max(90, Math.min(W - 90, lx));   // keep the label on screen
+      return [lx, ly]; };
+    const blocked = (x, y) => { const [lx, ly] = lblAt(x, y);
+      if (placed.some(q => Math.abs(q.x - x) < ext.x && Math.abs(q.y - y) < ext.y)) return true;
+      return markers.some(m => {
+        const hw = (rollQ % 2 ? m.box[3] : m.box[2]) / 2 + ext.x / 2, hh = (rollQ % 2 ? m.box[2] : m.box[3]) / 2 + ext.y / 2;
+        return (Math.abs(lx - m.lc[0]) < hw && Math.abs(ly - m.lc[1]) < hh) || Math.hypot(x - m.x, y - m.y) < m.r + 24 || Math.hypot(lx - m.x, ly - m.y) < m.r + 50; }); };
+    // Slide along the edge (alternating sides) until the arrow and its label are clear.
+    const base = vertEdge ? ey : ex2;
+    for (let step = 1; step < 14 && blocked(ex2, ey); step++) {
+      const d = Math.ceil(step / 2) * (vertEdge ? ext.y : ext.x) * 0.5 * (step % 2 ? 1 : -1);
+      if (vertEdge) ey = base + d; else ex2 = base + d;
+    }
+    if (ey < M.top || ey > H - M.bottom || ex2 < M.left - 20 || ex2 > W - M.right + 20 || blocked(ex2, ey)) continue;   // no room: skip
+    placed.push({ x: ex2, y: ey });
+    ctx.save(); ctx.translate(ex2, ey); ctx.rotate(ang);
     ctx.fillStyle = T.pill; ctx.beginPath(); ctx.arc(0, 0, 20, 0, 7); ctx.fill();
     ctx.fillStyle = T.pillInk; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-5, -8.5); ctx.lineTo(-5, 8.5); ctx.closePath(); ctx.fill();
     ctx.restore();
     const txt = `${O.flightLabel(it.a)} · ${fmtRange(it.sp.range)}`;
-    const lx = Math.max(80, Math.min(W - 80, ex - Math.cos(ang) * 4)), ly = ey + (ey > H / 2 ? -34 : 36);
-    label(lx, ly, txt, T, true);
+    const [lx2, ly2] = lblAt(ex2, ey);
+    label(lx2, ly2, 0, txt, T, true);
   }
 }
 function drawStatus(B) {
   const az = norm360(deg(Math.atan2(B.f[0], B.f[1]))), el = deg(Math.asin(Math.max(-1, Math.min(1, B.f[2]))));
   $('ar-facing').textContent = `Facing ${CARD[Math.round(az / 45) % 8]} ${Math.round(az)}° · ${el >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(el))}°`;
-  const n = O.all.length;
-  $('ar-count').textContent = n ? `${n} aircraft nearby` : 'No aircraft nearby right now';
+  const here = O.here, n = here ? O.all.filter(a => O.distMi(here.lat, here.lon, a.lat, a.lon) <= SKY_RANGE_MI).length : 0;
+  $('ar-count').textContent = n ? `${n} aircraft within ${O.metric ? '16 km' : '10 mi'}` : `No aircraft within ${O.metric ? '16 km' : '10 mi'} right now`;
   const poor = view.accuracy != null && (view.accuracy < 0 || view.accuracy > 25);
   const hint = $('ar-hint');
   if (hint.dataset.locked) return;
@@ -436,6 +494,30 @@ function drawStatus(B) {
     : 'Drag sideways to line a marker up with the real plane.';
   hint.textContent = msg;
   hint.hidden = !poor && performance.now() - hintSince > 6000;
+}
+// Space kept clear for the readout (on whichever side is "up") and the tip (opposite).
+function margins(withHint = true) {
+  const m = { top: 34, right: 34, bottom: 34, left: 34 }, sides = ['top', 'right', 'bottom', 'left'];
+  m[sides[rollQ % 4]] = 100; if (withHint) m[sides[(rollQ + 2) % 4]] = 96;
+  return m;
+}
+function updateRoll(B) {
+  const a = B.r[2], b = B.u[2];                                // where "up" in the world appears on screen
+  if (Math.hypot(a, b) > 0.15) {                                // looking almost straight up: keep the last tilt
+    const d = Math.atan2(Math.sin(Math.atan2(a, b) - roll), Math.cos(Math.atan2(a, b) - roll));
+    roll = Math.atan2(Math.sin(roll + d * 0.3), Math.cos(roll + d * 0.3));
+  }
+  const q = (((Math.round(roll / (Math.PI / 2))) % 4) + 4) % 4;
+  const near = Math.abs(Math.atan2(Math.sin(roll - q * Math.PI / 2), Math.cos(roll - q * Math.PI / 2))) < Math.PI / 4 - 0.12;
+  if (q !== rollQ && near) { rollQ = q; placeHUD(); }
+}
+function placeHUD() {
+  const ui = $('ar-ui'); if (!ui) return;
+  const turn = rollQ === 3 ? -90 : rollQ * 90, side = rollQ % 2 === 1;
+  ui.classList.toggle('turned', rollQ !== 0);
+  Object.assign(ui.style, side
+    ? { width: `${H}px`, height: `${W}px`, left: `${(W - H) / 2}px`, top: `${(H - W) / 2}px`, transform: `rotate(${turn}deg)` }
+    : { width: `${W}px`, height: `${H}px`, left: '0px', top: '0px', transform: `rotate(${turn}deg)` });
 }
 function frame() {
   if (!running) return;
@@ -449,6 +531,7 @@ function frame() {
     $('ar-facing').textContent = !here ? 'Waiting for your location…' : 'Waiting for the compass…';
     return;
   }
+  updateRoll(B);
   drawBackdrop(B, T);
   drawGrid(B, T);
   drawSunMoon(B, T, here);
@@ -473,6 +556,8 @@ async function open() {
   window.addEventListener('deviceorientation', onOrientation, true);
   if (stream) { video.srcObject = stream; video.hidden = false; cameraOn = true; try { await video.play(); } catch { /* shown when ready */ } }
   else { video.hidden = true; cameraOn = false; }
+  O.setSkyRange(SKY_RANGE_MI);
+  roll = 0; rollQ = 0; placeHUD();
   running = true; frame();
   try { await navigator.wakeLock?.request('screen'); } catch { /* optional */ }
 }
@@ -482,6 +567,7 @@ function close() {
   window.removeEventListener('deviceorientation', onOrientation, true);
   if (video?.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
   cameraOn = false; view.basis = null;
+  O.setSkyRange(0);
   $('ar').hidden = true; document.body.classList.remove('ar-open');
 }
 
@@ -503,8 +589,8 @@ function pointerUp(e) {
   if (t - lastTap < 300) { view.nudge = 0; lastTap = 0; hintSince = performance.now(); return; }
   lastTap = t;
   const rect = canvas.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
-  const hit = [...markers].reverse().find(m => Math.hypot(m.x - x, m.y - y) < Math.max(26, m.r) ||
-    (x >= m.box[0] && x <= m.box[0] + m.box[2] && y >= m.box[1] && y <= m.box[1] + m.box[3]));
+  const hit = [...markers].reverse().find(m => Math.hypot(m.x - x, m.y - y) < Math.max(30, m.r) ||
+    Math.hypot(m.lc[0] - x, m.lc[1] - y) < m.lr);
   if (hit) O.openDetail(hit.hex);
 }
 
@@ -521,11 +607,14 @@ function init() {
   c.addEventListener('pointermove', pointerMove);
   c.addEventListener('pointerup', pointerUp);
   c.addEventListener('pointercancel', () => { drag = null; });
-  window.addEventListener('resize', () => { if (running) resize(); });
+  const reflow = () => { if (running) { resize(); placeHUD(); } };
+  window.addEventListener('resize', reflow);
+  window.addEventListener('orientationchange', () => setTimeout(reflow, 250));
+  screen.orientation?.addEventListener?.('change', () => setTimeout(reflow, 250));
   document.addEventListener('visibilitychange', () => { if (document.hidden && running) close(); });
   if (location.hash === '#sky') open();
 }
 
 // Exposed for testing the math without sensors.
-window.OverheadAR = { _draw: (c, ...args) => { ctx = c.getContext('2d'); drawModel(...args); }, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
+window.OverheadAR = { closure, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
 })();

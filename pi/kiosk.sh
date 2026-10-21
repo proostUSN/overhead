@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch Overhead full-screen on a Raspberry Pi display.
+# Launch Spot-Air full-screen on a Raspberry Pi display.
 # Edit the four values below, then run once by hand to test: ./pi/kiosk.sh
 set -euo pipefail
 

@@ -1,6 +1,6 @@
 {
-  "name": "Overhead",
-  "short_name": "Overhead",
+  "name": "Spot-Air",
+  "short_name": "Spot-Air",
   "description": "Aircraft passing overhead, from free ADS-B data.",
   "start_url": "./",
   "scope": "./",

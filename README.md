@@ -1,4 +1,4 @@
-# Overhead
+# Spot-Air
 
 A flight tracker for your phone: every aircraft within a few miles of you, with its route, type, altitude, speed, direction and a photo. It uses free, community-run ADS-B networks, so there are no accounts or API keys. The same app runs on a Raspberry Pi patio display, and can read straight from your own ADS-B receiver.
 
@@ -41,6 +41,9 @@ Airline logos load from public logo services (images.kiwi.com, FlightAware) by a
 
 Tap **Sky** (top right) and point your phone at the sky. The camera view shows every aircraft nearby where it actually is, with flight number, altitude, distance, how high it is above the horizon, and whether it's coming toward you, moving away or crossing. Each aircraft is drawn as a shaded 3D model of its type (wide-body, four-engine, narrow-body, rear-engine regional or business jet, turboprop, small single-engine, helicopter), oriented by its real heading and climb or descent angle and seen from your exact viewing angle, so you see its belly overhead, its side as it crosses, or its nose as it comes toward you. Models are drawn larger than true size; wingtip lights are on the correct sides, with strobes and a beacon at night. Aircraft out of view get an arrow on the screen edge showing which way to turn. Tap a plane for its details.
 
+- The sky view reaches out to **10 miles** (the cards keep your normal radius).
+- A soft **halo** around each aircraft shows how it's moving relative to you: **green** while it's still closing, **amber** at or near its closest point, **red** once it's moving away.
+- Text stays level with the horizon however you hold the phone, and the readout turns to whichever edge is up.
 - The horizon, compass points and 30°/60° lines are drawn over the view, along with the **sun** and **moon** (at its current phase) in their real positions, and stars at night when the camera is off.
 - Markers follow the time of day: light labels by day, dark with a glow and red/green wingtip lights at night.
 - Positions are moved forward from the last data update along each plane's heading and speed, so markers keep up with fast jets.
@@ -105,7 +108,7 @@ If one network is down, **Automatic** moves to the next one. Running your own re
    sudo bash -c "$(wget -q -O - https://github.com/wiedehopf/tar1090/raw/master/install.sh)"
    ```
    Check `http://<pi-address>/tar1090/` in a browser; you should see aircraft.
-2. Serve Overhead from the same web server, so it can read the receiver directly:
+2. Serve Spot-Air from the same web server, so it can read the receiver directly:
    ```bash
    sudo ln -s ~/overhead /var/www/html/overhead
    ```
