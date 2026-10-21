@@ -1,6 +1,6 @@
 /* Overhead service worker: app shell offline, live data always from the network. */
-const VERSION = 'overhead-v17';
-const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'airports.json'];
+const VERSION = 'overhead-v18';
+const SHELL = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'airports.json', 'ar.js'];
 const PHOTOS = 'overhead-photos';
 const FONTS = 'overhead-fonts';
 

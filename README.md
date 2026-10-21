@@ -37,6 +37,16 @@ The background follows the real sky at your location: blue with drifting clouds 
 
 Airline logos load from public logo services (images.kiwi.com, FlightAware) by airline code. Logos are trademarks of their airlines; when one isn't available the card shows the airline's code instead.
 
+## Sky view
+
+Tap **Sky** (top right) and point your phone at the sky. The camera view shows every aircraft nearby where it actually is, with flight number, altitude, distance, how high it is above the horizon, and whether it's coming toward you, moving away or crossing. The plane symbol is turned to match its real heading, and shortens when it's flying toward or away from you. Aircraft out of view get an arrow on the screen edge showing which way to turn. Tap a plane for its details.
+
+- The horizon, compass points and 30°/60° lines are drawn over the view, along with the **sun** and **moon** (at its current phase) in their real positions, and stars at night when the camera is off.
+- Markers follow the time of day: light labels by day, dark with a glow and red/green wingtip lights at night.
+- Positions are moved forward from the last data update along each plane's heading and speed, so markers keep up with fast jets.
+- **Compass accuracy** on phones is about ±5–15°. If markers sit a little to the side of the real plane, **drag sideways** to line them up; **double-tap** resets. If the app says the compass needs calibrating, wave the phone in a figure 8.
+- The first time, iPhone asks to allow **Motion & Orientation** and the **camera**. Without the camera it still works over a painted sky.
+
 ## Settings
 
 | Setting | Notes |
@@ -119,7 +129,8 @@ cd ~/overhead && git pull
 | File | Purpose |
 |---|---|
 | `index.html` | Page layout and styles |
-| `app.js` | Data sources, enrichment, scope, strips, settings, kiosk mode |
+| `app.js` | Data sources, enrichment, cards, settings, patio display mode |
+| `ar.js` | Sky view: camera, compass/tilt sensors, sky projection |
 | `sw.js` | Service worker: app works offline as a shell, caches photos |
 | `manifest.webmanifest`, `icons/` | Home-screen install |
 | `pi/kiosk.sh` | Full-screen launcher for the Pi |

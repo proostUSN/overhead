@@ -88,6 +88,22 @@ body[data-sky="dusk"] .clouds span{background:radial-gradient(ellipse,rgba(255,2
 .clouds .c4{width:300px;height:70px;top:8%;left:-25%;animation-duration:180s;animation-delay:-150s}
 @keyframes drift{from{transform:translateX(0)}to{transform:translateX(160vw)}}
 
+/* sky button + sky view */
+.topbtns{display:flex;align-items:center;gap:6px}
+.skybtn{display:flex;align-items:center;gap:6px;border:1px solid var(--glass-line);background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:6px 12px 6px 9px;font-size:.85rem;font-weight:600}
+.skybtn svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round}
+.skybtn:hover{background:rgba(255,255,255,.22)}
+#ar{position:fixed;inset:0;z-index:15;background:#0d1a3c;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+#ar video,#ar canvas{position:absolute;inset:0;width:100%;height:100%}
+#ar video{object-fit:cover}
+.ar-top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top,0px)) var(--gutter-r) 10px var(--gutter-l);background:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,0));pointer-events:none}
+.ar-close{pointer-events:auto;width:40px;height:40px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:1.1rem;flex:none}
+.ar-read{display:flex;flex-direction:column;min-width:0;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.ar-read b{font:700 1.05rem var(--f-num);font-variant-numeric:tabular-nums}
+.ar-read span{font-size:.8rem;color:rgba(255,255,255,.85)}
+.ar-hint{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:calc(100% - 32px);text-align:center;font-size:.8rem;color:#fff;background:rgba(0,0,0,.45);padding:7px 14px;border-radius:999px;pointer-events:none}
+body.ar-open{overflow:hidden}
+
 /* the card */
 #stage{display:flex;flex-direction:column;gap:14px}
 .card{position:relative;background:var(--glass);border:1px solid var(--glass-line);border-radius:26px;padding:20px 20px 18px;display:flex;flex-direction:column;gap:16px;-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:0 18px 40px rgba(5,10,30,.22);cursor:pointer;overflow:hidden}
@@ -230,7 +246,8 @@ body.kiosk .gear{opacity:.2}
 <div class="app">
   <header class="top">
     <div class="loc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span id="where">Overhead</span></div>
-    <button class="gear" id="settingsBtn" aria-label="Settings" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    <div class="topbtns"><button class="skybtn" id="skyBtn" type="button" aria-label="Point at the sky"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M17 10.5v-1l-4-2.5V4.8a.8.8 0 0 0-1.6 0V7L7.4 9.5v1l4-1.2v2.6l-1 .8V13l1.8-.5L14 13v-.8l-1-.8V9.3z" fill="currentColor" stroke="none" transform="translate(-.2 3.2)"/></svg><span>Sky</span></button>
+    <button class="gear" id="settingsBtn" aria-label="Settings" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
   </header>
   <nav class="tabs" id="tabs" role="tablist" aria-label="Aircraft in range" hidden></nav>
   <main id="stage" aria-live="polite"></main>
@@ -238,6 +255,15 @@ body.kiosk .gear{opacity:.2}
   <div class="status" id="status" role="status"></div>
 </div>
 
+<section id="ar" hidden aria-label="Sky view">
+  <video id="ar-video" playsinline muted autoplay hidden></video>
+  <canvas id="ar-canvas"></canvas>
+  <div class="ar-top">
+    <button class="ar-close" id="ar-close" type="button" aria-label="Close sky view">✕</button>
+    <div class="ar-read"><b id="ar-facing">Starting…</b><span id="ar-count"></span></div>
+  </div>
+  <div class="ar-hint" id="ar-hint">Point your phone at the sky.</div>
+</section>
 <div class="scrim" id="scrim"></div>
 <section class="sheet" id="sheet" aria-label="Aircraft details" aria-hidden="true"><div class="inner" id="sheetInner"></div></section>
 
@@ -300,5 +326,6 @@ body.kiosk .gear{opacity:.2}
 </dialog>
 
 <script src="app.js"></script>
+<script src="ar.js"></script>
 </body>
 </html>

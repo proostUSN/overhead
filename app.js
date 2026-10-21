@@ -313,7 +313,7 @@ function startLocation() {
   if (!('geolocation' in navigator)) { locError = 'This browser can’t share your location. Set a fixed point in Settings.'; return; }
   if (!window.isSecureContext) { locError = 'Location needs HTTPS. Open the app from its https:// link, or set a fixed point in Settings.'; return; }
   watchId = navigator.geolocation.watchPosition(
-    p => { const first = !here; here = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }; locError = null; if (first) poll(true); },
+    p => { const first = !here; here = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, altM: p.coords.altitude }; locError = null; if (first) poll(true); },
     e => { locError = e.code === 1 ? 'Location permission is off. Allow it for this site, or set a fixed point in Settings.' : 'Couldn’t get your location yet.'; render(); },
     { enableHighAccuracy: false, maximumAge: 30000, timeout: 20000 }
   );
@@ -340,6 +340,7 @@ async function poll(now) {
       const inside = list.filter(a => a.dist <= cfg.radiusMi && (cfg.showGround || !a.ground)).sort((x, y) => x.dist - y.dist);
       state.wider = list.length;
       if (inside.length) state.last = { name: flightLabel(inside[0]), at: Date.now() };
+      state.all = list.filter(a => !a.ground);                   // everything fetched (a little beyond the radius), for the sky view
       state.list = inside; state.label = label; state.updated = Date.now(); state.error = null; state.needsRelay = false;
       enrichTop(inside);
     } catch (e) {
@@ -825,6 +826,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cf
 
 // Read-only snapshot for troubleshooting from the browser console: overheadDebug()
 window.overheadDebug = () => ({ list: state.list.map(a => ({ cs: a.callsign, hex: a.hex, route: routeOf(a) && routeOf(a).from ? routeOf(a).from.code + '-' + routeOf(a).to.code : routeOf(a) === null ? null : 'none' })), routesKnown: [...enrich.route.keys()], pending: [...enrich.pending], queue: enrich.queue.length });
+
+// Small read-only bridge for the sky view (ar.js).
+window.Overhead = {
+  get here() { return here; }, get list() { return state.list; }, get all() { return state.all || state.list; },
+  get updated() { return state.updated; }, get metric() { return metric(); }, get kiosk() { return !!cfg.kiosk; },
+  distMi, bearing, sunPos, moonPos, skyPhase, flightLabel, typeName, openDetail, routeOf,
+};
 
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') {
