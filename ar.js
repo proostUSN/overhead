@@ -120,7 +120,139 @@ function aspect(sp, a) {
 /* ---------- fixed sky decorations ---------- */
 const STARS = (() => { let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   return Array.from({ length: 260 }, () => ({ az: rnd() * 360, el: deg(Math.asin(rnd())) , m: rnd() })); })();
-const PLANE = new Path2D('M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z');
+/* ---------- aircraft silhouettes (top view, nose up, 24-unit box) ---------- */
+// Proportions per class: fuselage width/ends, wing (y of root leading edge, root chord, half-span,
+// sweep, tip chord), tailplane, and engines. Built once into Path2D shapes.
+const CLASSES = {
+  quad:      { scale: 1.25, fw: 3.0, y0: 0.4, y1: 23.6, wing: [9, 5.8, 11.8, 5.6, 1.4], stab: [19.6, 2.6, 4.8, 2.2, 0.9], eng: [[4.4, 10.6, 1.5, 3], [8.1, 12.8, 1.4, 2.7]], tip: 'swept' },
+  heavy:     { scale: 1.18, fw: 3.0, y0: 0.4, y1: 23.6, wing: [9, 5.6, 11.8, 5.4, 1.4], stab: [19.6, 2.6, 4.8, 2.2, 0.9], eng: [[5.2, 10.8, 1.8, 3.4]] },
+  narrow:    { scale: 1.0,  fw: 2.4, y0: 1.0, y1: 23.0, wing: [9.6, 4.6, 10.6, 4.2, 1.2], stab: [19.6, 2.2, 4.2, 1.8, 0.8], eng: [[4.0, 10.9, 1.5, 2.7]] },
+  rearjet:   { scale: 0.95, fw: 2.2, y0: 1.2, y1: 22.8, wing: [10.0, 3.8, 8.8, 2.8, 1.1], stab: [21.0, 1.8, 4.2, 1.4, 0.8], rear: [2.2, 15.8, 1.5, 3.4] },
+  bizjet:    { scale: 0.85, fw: 2.0, y0: 1.6, y1: 22.6, wing: [10.4, 3.6, 7.8, 2.4, 1.0], stab: [21.0, 1.7, 3.8, 1.4, 0.7], rear: [2.0, 15.6, 1.4, 3.0] },
+  turboprop: { scale: 0.95, fw: 2.0, y0: 2.0, y1: 22.6, wing: [8.6, 2.8, 11.2, 0.2, 1.7], stab: [19.6, 1.9, 4.4, 0.4, 1.2], nacelle: [4.2, 6.2, 1.5, 5.4], props: true },
+  ga:        { scale: 0.8,  fw: 1.8, y0: 3.0, y1: 22.0, wing: [8.4, 2.7, 10.6, 0, 2.7], stab: [19.6, 1.8, 3.9, 0, 1.8], nose: true },
+  heli:      { scale: 0.9,  heli: true },
+};
+/* ---------- 3D aircraft models ----------
+   Body frame: X forward (nose), Y right wing, Z up. Built from the class proportions above
+   (24-unit box: box y 0 = nose … 24 = tail, box x 12 = centerline). */
+const wingZ = { ga: 0.9, turboprop: 0.85 };                      // high-wing types; others are low-wing
+const tTail = { rearjet: true, bizjet: true, turboprop: true };
+function buildMesh(kind) {
+  const c = CLASSES[kind], faces = [], tips = {};
+  const B = (bx, by, z) => [12 - by, bx - 12, z];                 // box → body
+  const quad = (pts, part = 'skin') => faces.push({ pts, part });
+  function lathe(yStations, radii, cx = 12, zc = 0, n = 10, sz = 1) {   // body of revolution along X
+    const rings = yStations.map((y, i) => Array.from({ length: n }, (_, k) => { const t = k / n * Math.PI * 2; return B(cx + Math.cos(t) * radii[i], y, zc + Math.sin(t) * radii[i] * sz); }));
+    for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < n; k++) quad([rings[i][k], rings[i][(k + 1) % n], rings[i + 1][(k + 1) % n], rings[i + 1][k]]);
+    quad(rings[0].slice().reverse()); quad(rings[rings.length - 1]);
+  }
+  const disk = (cx, by, zc, r, axis, part) => {                    // propeller / rotor disc
+    const n = 16; quad(Array.from({ length: n }, (_, k) => { const t = k / n * Math.PI * 2;
+      return axis === 'x' ? B(cx + Math.cos(t) * r, by, zc + Math.sin(t) * r) : axis === 'y' ? B(cx, by + Math.cos(t) * r, zc + Math.sin(t) * r) : B(cx + Math.cos(t) * r, by + Math.sin(t) * r, zc); }), part);
+  };
+  if (c.heli) {
+    lathe([5, 6.2, 8, 10.5, 12.8, 14], [0.4, 2.2, 3.0, 3.1, 2.2, 0.9], 12, 0, 12, 1.1);
+    lathe([13.5, 21.5], [0.55, 0.35], 12, 0.9, 6);
+    quad([B(12, 19.6, 0.9), B(12, 21.6, 0.9), B(12, 21.9, 3.4), B(12, 20.8, 3.4)]);         // tail fin
+    disk(12.6, 21, 1.6, 1.7, 'y', 'rotor');                                                   // tail rotor
+    disk(12, 9.5, 3.9, 11.2, 'z', 'rotor');                                                   // main rotor disc
+    faces.push({ blades: true, center: B(12, 9.5, 4.0), r: 11.2 });
+    tips.l = B(12, 21.6, 1.2); tips.r = tips.l; tips.beacon = B(12, 9.5, 3.4);
+    return { faces, tips };
+  }
+  const h = c.fw / 2, y0 = c.y0, y1 = c.y1;
+  lathe([y0, y0 + c.fw * 0.35, y0 + c.fw * 1.4, y1 - 4.5, y1 - 1.6, y1], [0.08, h * 0.72, h, h, h * 0.55, h * 0.22]);
+  const wz = (wingZ[kind] ?? -0.35) * h;
+  const wing = ([y, rc, span, sweep, tc], z, dihedral, part) => {
+    for (const sg of [1, -1]) quad([B(12 + sg * h * 0.85, y, z), B(12 + sg * span, y + sweep, z + span * dihedral), B(12 + sg * span, y + sweep + tc, z + span * dihedral), B(12 + sg * h * 0.85, y + rc, z)], part);
+  };
+  wing(c.wing, wz, wz < 0 ? 0.06 : 0.01);
+  const finH = c.fw * 1.25 + (kind === 'heavy' || kind === 'quad' ? 2.4 : 1.6);
+  const [sy, src] = c.stab;
+  quad([B(12, sy - 1.2, h * 0.6), B(12, y1 - 0.2, h * 0.4), B(12, y1 - 0.4, h + finH), B(12, sy + src * 0.4, h + finH)]);   // vertical fin
+  wing(c.stab, tTail[kind] ? h + finH - 0.15 : h * 0.15, 0.03);
+  for (const [x, y, w, l] of c.eng || []) for (const sg of [1, -1]) lathe([y, y + l], [w / 2, w * 0.42], 12 + sg * x, wz - w * 0.65 + x * 0.06, 8);
+  if (c.rear) { const [x, y, w, l] = c.rear; for (const sg of [1, -1]) lathe([y, y + l], [w / 2, w * 0.4], 12 + sg * x, h * 0.35, 8); }
+  if (c.nacelle) { const [x, y, w, l] = c.nacelle; for (const sg of [1, -1]) { lathe([y, y + l], [w / 2, w * 0.3], 12 + sg * x, wz - w * 0.35, 8); disk(12 + sg * x, y - 0.2, wz - w * 0.35, 2.1, 'x', 'prop'); } }
+  if (c.nose) disk(12, y0 - 0.3, 0, 2.2, 'x', 'prop');
+  const [wy, , span, sweep, tc] = c.wing, dz = wz + span * (wz < 0 ? 0.06 : 0.01);
+  tips.l = B(12 - span, wy + sweep + tc * 0.4, dz); tips.r = B(12 + span, wy + sweep + tc * 0.4, dz);
+  tips.tail = B(12, y1, h * 0.3); tips.beacon = B(12, (y0 + y1) / 2, -h);
+  return { faces, tips };
+}
+const MESHES = {};
+const meshFor = k => MESHES[k] || (MESHES[k] = buildMesh(k));
+
+// Body axes in the world from track (heading over the ground) and flight-path angle (climb/descent).
+function attitude(a) {
+  const psi = rad(a.track ?? 0);
+  const gam = (a.vrate != null && a.gs) ? Math.atan2(a.vrate / 60, a.gs * 1.68781) : 0;   // ft/s up vs ft/s along
+  const fwd = [Math.sin(psi) * Math.cos(gam), Math.cos(psi) * Math.cos(gam), Math.sin(gam)];
+  const right = [Math.cos(psi), -Math.sin(psi), 0];
+  return { fwd, right, up: cross(right, fwd) };
+}
+const toWorld = (P, A) => add(add(scale(A.fwd, P[0]), scale(A.right, P[1])), scale(A.up, P[2]));
+
+// Draw a model at screen point (sx, sy), seen along the true line of sight `los`.
+function drawModel(kind, a, sx, sy, sizePx, los, B, T, light, now) {
+  const M = meshFor(kind), A = attitude(a), k = sizePx / 24;
+  let up = add(B.u, scale(los, -dot(B.u, los))); up = unit(up);
+  const right = cross(los, up);
+  const toScreen = w => [sx + dot(w, right) * k, sy - dot(w, up) * k, dot(w, los)];
+  const polys = [];
+  for (const f of M.faces) {
+    if (f.blades) {                                                  // spinning rotor blades
+      const c = toWorld(f.center, A), t = now / 90;
+      for (const off of [0, Math.PI / 2]) {
+        const d = add(scale(A.fwd, Math.cos(t + off) * f.r), scale(A.right, Math.sin(t + off) * f.r)), w = add(scale(A.fwd, -Math.sin(t + off) * 0.5), scale(A.right, Math.cos(t + off) * 0.5));
+        const pts = [add(add(c, d), w), add(add(c, d), scale(w, -1)), add(add(c, scale(d, -1)), scale(w, -1)), add(add(c, scale(d, -1)), w)].map(toScreen);
+        polys.push({ pts, depth: pts.reduce((s, p) => s + p[2], 0) / 4, part: 'blade', n: A.up });
+      }
+      continue;
+    }
+    const W = f.pts.map(P => toWorld(P, A));
+    const n = unit(cross(add(W[1], scale(W[0], -1)), add(W[2], scale(W[0], -1))));
+    const pts = W.map(toScreen);
+    polys.push({ pts, depth: pts.reduce((s, p) => s + p[2], 0) / pts.length, part: f.part, n });
+  }
+  polys.sort((p, q) => q.depth - p.depth);                         // painter's algorithm: far faces first
+  const base = T.phase === 'day' ? [236, 241, 248] : T.phase === 'dusk' ? [214, 206, 214] : [150, 166, 196];
+  const amb = T.phase === 'night' ? 0.62 : 0.5;
+  // Outline pass so the model stands out against bright or dark sky.
+  ctx.lineJoin = 'round'; ctx.strokeStyle = T.planeEdge; ctx.lineWidth = 2.6;
+  for (const p of polys) { if (p.part !== 'skin') continue; ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.stroke(); }
+  for (const p of polys) {
+    let n = p.n; if (dot(n, los) > 0) n = scale(n, -1);             // the side facing you
+    const b = Math.min(1.08, amb + (1 - amb) * Math.max(0, dot(n, light)) + 0.22 * Math.max(0, -n[2]));   // + light bounced up from the ground
+    ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
+    if (p.part === 'rotor' || p.part === 'prop') { ctx.fillStyle = T.phase === 'day' ? 'rgba(40,50,70,.18)' : 'rgba(220,230,255,.16)'; ctx.fill(); continue; }
+    const col = p.part === 'blade' ? base.map(v => Math.round(v * 0.45)) : base.map(v => Math.round(Math.min(255, v * b)));
+    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; ctx.fill();
+    ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke();                         // hide seams
+  }
+  // Lights: red left wingtip, green right, white tail; strobes and a red beacon at night.
+  const L = (P, color, r) => { const q = toScreen(toWorld(P, A)); ctx.save(); ctx.shadowColor = color; ctx.shadowBlur = 10; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, 7); ctx.fill(); ctx.restore(); };
+  const night = T.phase !== 'day', tip = M.tips;
+  if (tip.l && tip.r && tip.l !== tip.r) { L(tip.l, '#ff3b3b', night ? 3.2 : 2.2); L(tip.r, '#2dff86', night ? 3.2 : 2.2); }
+  if (night) {
+    if (tip.tail) L(tip.tail, '#ffffff', 2.4);
+    if (now % 1300 < 90 && tip.l !== tip.r) { L(tip.l, '#ffffff', 5); L(tip.r, '#ffffff', 5); }
+    if (now % 1000 < 140 && tip.beacon) L(tip.beacon, '#ff2a2a', 3.4);
+  }
+}
+
+function classOf(a) {
+  const t = (a.type || '').toUpperCase(), cat = a.category || '';
+  if (cat === 'A7' || /^(R22|R44|R66|EC\d|AS\d|B06|B407|B412|B429|S76|S92|A109|A119|A139|A169|H60|H500|MD\d{3}|BK17|EH10|UH1|H47)/.test(t)) return 'heli';
+  if (/^(B74.|A38.|A34.|C17|K35R|E3TF|E6)$/.test(t)) return 'quad';
+  if (/^(B76.|B77.|B78.|A30.|A310|A33.|A35.|MD11|DC10|L101|C5M|KC10|K46)$/.test(t)) return 'heavy';
+  if (/^(CRJ|E135|E145|E35L|MD8|MD9|B712|F100|F70|DC9)/.test(t)) return 'rearjet';
+  if (/^(C5\d|C6[58]|C68A|C700|C750|CL3|CL6|GL|GLF|G[2-7]|FA[0-9]|F2TH|F900|LJ|E50P|E55P|E545|E550|HDJT|PC24|SF50|BE40|H25|PRM1|EA50|C25)/.test(t)) return 'bizjet';
+  if (/^(AT4|AT7|ATR|DH8|DHC|SF34|E120|B190|BE20|BE30|B350|BE9|PC12|C208|C30J|C130|TBM|KODI|P180|SW4|D328|JS3|PAY|PA31T|P46T|MU2|AN2)/.test(t)) return 'turboprop';
+  if (/^(C1[5-8]\d|C2[01]\d|P28|PA2|PA3|PA4|PA1|SR2|BE3[356]|BE2|M20|DA4|DA2|RV|AA5|C42|J3|GLAS|COL|EVOT|LNC)/.test(t)) return 'ga';
+  return { A1: 'ga', A2: 'bizjet', A3: 'narrow', A4: 'narrow', A5: 'heavy', A6: 'bizjet', B1: 'ga', B4: 'ga' }[cat] || 'narrow';
+}
 const CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 /* ---------- rendering ---------- */
@@ -233,6 +365,8 @@ function fmtRange(m) { return O.metric ? `${(m / 1000).toFixed(1)} km` : `${(m /
 
 function drawAircraft(B, T, here, now) {
   markers = [];
+  const sun = O.sunPos(here.lat, here.lon, new Date(now));
+  const light = sun.alt > 0 ? fromAzEl(sun.az, sun.alt) : unit([0.3, 0.2, 1]);
   const list = O.all.filter(a => a.lat != null && a.alt != null);
   const items = list.map(a => {
     const p = extrapolate(a, now), sp = skyPoint(here, p);
@@ -242,48 +376,31 @@ function drawAircraft(B, T, here, now) {
   for (const it of items) {
     const s = project(it.v, B);
     if (!onScreen(s, 10)) { edge.push({ it, s }); continue; }
-    // Screen direction of travel: project a point 1 km ahead along the track (and climb).
-    let ang = -Math.PI / 2, fore = 1;
-    if (it.a.track != null) {
-      const ahead = { lat: it.p.lat + 1000 * Math.cos(rad(it.a.track)) / M_PER_DEG, lon: it.p.lon + 1000 * Math.sin(rad(it.a.track)) / (M_PER_DEG * Math.cos(rad(it.p.lat))), alt: it.p.alt + (it.a.vrate || 0) * (1000 / Math.max(50, (it.a.gs || 200) * 0.514444)) / 60 };
-      const sa = skyPoint(here, ahead), s2 = project(fromAzEl(sa.az, sa.el), B);
-      if (s2.z > 0) {
-        const dx = s2.x - s.x, dy = s2.y - s.y, len = Math.hypot(dx, dy);
-        ang = Math.atan2(dy, dx);
-        fore = Math.max(0.28, Math.min(1, len / ((1000 / it.sp.range) * FPX)));   // short = moving toward/away from you
-      }
-    }
-    const size = Math.max(28, Math.min(60, 2900 / Math.sqrt(it.sp.range)));
-    ctx.save();
-    ctx.translate(s.x, s.y); ctx.rotate(ang + Math.PI / 2); ctx.scale(size / 24, (size / 24) * fore); ctx.translate(-12, -12);
-    if (T.glow !== 'rgba(0,0,0,0)') { ctx.shadowColor = T.glow; ctx.shadowBlur = 14; }
-    ctx.fillStyle = T.plane; ctx.fill(PLANE);
-    ctx.shadowBlur = 0; ctx.lineWidth = 1.4 * 24 / size; ctx.strokeStyle = T.planeEdge; ctx.stroke(PLANE);
-    if (T.phase !== 'day') {                                    // nav lights: red left wing, green right
-      ctx.fillStyle = '#ff4d4d'; ctx.beginPath(); ctx.arc(2.6, 15, 1.1, 0, 7); ctx.fill();
-      ctx.fillStyle = '#3dff8b'; ctx.beginPath(); ctx.arc(21.4, 15, 1.1, 0, 7); ctx.fill();
-    }
-    ctx.restore();
+    const kind = classOf(it.a);
+    const size = Math.max(72, Math.min(170, 6400 / Math.sqrt(it.sp.range))) * CLASSES[kind].scale;
+    drawModel(kind, it.a, s.x, s.y, size, it.v, B, T, light, now);
     // Label below the aircraft.
     const name = O.flightLabel(it.a);
+    let typ = O.typeName(it.a) || ''; if (typ.length > 26) typ = typ.slice(0, 25) + '…';
     const line2 = `${fmtAltShort(it.p.alt)} · ${fmtRange(it.sp.range)} · ${Math.round(it.sp.el)}° up`;
     const asp = aspect(it.sp, it.a);
     ctx.font = '700 18px -apple-system,system-ui,sans-serif';
     const w1 = ctx.measureText(name).width;
     ctx.font = '500 14.5px -apple-system,system-ui,sans-serif';
-    const w2 = Math.max(ctx.measureText(line2).width, asp ? ctx.measureText(asp).width : 0);
-    const bw = Math.max(w1, w2) + 22, bh = asp ? 68 : 50;
+    const w2 = Math.max(ctx.measureText(line2).width, ctx.measureText(typ).width, asp ? ctx.measureText(asp).width : 0);
+    const bw = Math.max(w1, w2) + 22, bh = asp ? 86 : 68;
     const bx = Math.max(8, Math.min(W - bw - 8, s.x - bw / 2));
-    let by = s.y + size * 0.6 + 6;
-    if (by + bh > H - 70) by = s.y - size * 0.6 - 6 - bh;           // near the bottom: put the label above
+    let by = s.y + size * 0.55 + 8;
+    if (by + bh > H - 70) by = s.y - size * 0.55 - 8 - bh;           // near the bottom: put the label above
     const tx = bx + bw / 2;
     ctx.fillStyle = T.pill; roundRect(bx, by, bw, bh, 11); ctx.fill();
     ctx.fillStyle = T.pillInk; ctx.textAlign = 'center';
     ctx.font = '700 18px -apple-system,system-ui,sans-serif'; ctx.fillText(name, tx, by + 21);
-    ctx.font = '500 14.5px -apple-system,system-ui,sans-serif'; ctx.globalAlpha = 0.9; ctx.fillText(line2, tx, by + 40);
-    if (asp) ctx.fillText(asp, tx, by + 58);
+    ctx.font = '500 14.5px -apple-system,system-ui,sans-serif'; ctx.globalAlpha = 0.9;
+    ctx.fillText(typ, tx, by + 40); ctx.fillText(line2, tx, by + 58);
+    if (asp) ctx.fillText(asp, tx, by + 76);
     ctx.globalAlpha = 1; ctx.textAlign = 'left';
-    markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.8, box: [bx, by, bw, bh] });
+    markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.6, box: [bx, by, bw, bh] });
   }
   // Off-screen aircraft: arrows on the edge pointing the way to turn.
   edge.sort((x, y) => x.it.sp.range - y.it.sp.range);
@@ -399,6 +516,7 @@ function init() {
   $('skyBtn')?.addEventListener('click', open);
   $('ar-close')?.addEventListener('click', close);
   const c = $('ar-canvas');
+  if (!c) return;
   c.addEventListener('pointerdown', pointerDown);
   c.addEventListener('pointermove', pointerMove);
   c.addEventListener('pointerup', pointerUp);
@@ -409,5 +527,5 @@ function init() {
 }
 
 // Exposed for testing the math without sensors.
-window.OverheadAR = { deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
+window.OverheadAR = { _draw: (c, ...args) => { ctx = c.getContext('2d'); drawModel(...args); }, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
 })();

@@ -39,7 +39,7 @@ Airline logos load from public logo services (images.kiwi.com, FlightAware) by a
 
 ## Sky view
 
-Tap **Sky** (top right) and point your phone at the sky. The camera view shows every aircraft nearby where it actually is, with flight number, altitude, distance, how high it is above the horizon, and whether it's coming toward you, moving away or crossing. The plane symbol is turned to match its real heading, and shortens when it's flying toward or away from you. Aircraft out of view get an arrow on the screen edge showing which way to turn. Tap a plane for its details.
+Tap **Sky** (top right) and point your phone at the sky. The camera view shows every aircraft nearby where it actually is, with flight number, altitude, distance, how high it is above the horizon, and whether it's coming toward you, moving away or crossing. Each aircraft is drawn as a shaded 3D model of its type (wide-body, four-engine, narrow-body, rear-engine regional or business jet, turboprop, small single-engine, helicopter), oriented by its real heading and climb or descent angle and seen from your exact viewing angle, so you see its belly overhead, its side as it crosses, or its nose as it comes toward you. Models are drawn larger than true size; wingtip lights are on the correct sides, with strobes and a beacon at night. Aircraft out of view get an arrow on the screen edge showing which way to turn. Tap a plane for its details.
 
 - The horizon, compass points and 30°/60° lines are drawn over the view, along with the **sun** and **moon** (at its current phase) in their real positions, and stars at night when the camera is off.
 - Markers follow the time of day: light labels by day, dark with a glow and red/green wingtip lights at night.
