@@ -40,7 +40,7 @@ body[data-sky="dusk"]{background:#7b5592 var(--sky-dusk) fixed}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid #fff;outline-offset:3px}
 
-.app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:12px;padding-left:var(--gutter-l);padding-right:var(--gutter-r);padding-block:14px 22px}
+.app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:12px;padding-left:var(--gutter-l);padding-right:var(--gutter-r);padding-top:calc(14px + env(safe-area-inset-top,0px));padding-bottom:calc(22px + env(safe-area-inset-bottom,0px))}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .top .loc{font-size:.8rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:6px}
 .top .loc svg{width:12px;height:12px;fill:currentColor}
@@ -223,7 +223,7 @@ dialog h2{margin:0;font-size:1.2rem}
 
 /* patio display: same card, scaled to the screen */
 body.kiosk{cursor:none}
-body.kiosk .app{max-width:none;min-height:100vh;justify-content:center;padding-block:2vh}
+body.kiosk .app{max-width:none;min-height:100vh;justify-content:center;padding-top:calc(2vh + env(safe-area-inset-top,0px));padding-bottom:calc(2vh + env(safe-area-inset-bottom,0px))}
 html.kiosk{font-size:clamp(16px,2.1vw,34px)}
 body.kiosk .card{max-width:min(1100px,94vw);width:100%;margin:0 auto}
 body.kiosk .tabs{justify-content:center}
