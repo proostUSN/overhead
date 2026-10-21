@@ -179,15 +179,15 @@ function drawGrid(B, T) {
     ctx.stroke();
     if (el) {
       const p = project(fromAzEl(deg(Math.atan2(B.f[0], B.f[1])) + 8, el), B);
-      if (onScreen(p)) { ctx.font = '600 11px -apple-system,system-ui,sans-serif'; ctx.fillStyle = T.soft; ctx.fillText(`${el}°`, p.x + 4, p.y - 4); }
+      if (onScreen(p)) { ctx.font = '600 14px -apple-system,system-ui,sans-serif'; ctx.fillStyle = T.soft; ctx.fillText(`${el}°`, p.x + 5, p.y - 5); }
     }
   }
   ctx.setLineDash([]);
-  ctx.font = '700 13px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center';
+  ctx.font = '800 18px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center';
   for (let i = 0; i < 8; i++) {
     const p = project(fromAzEl(i * 45, 0), B);
     if (!onScreen(p)) continue;
-    ctx.fillStyle = T.line; ctx.fillText(CARD[i], p.x, p.y - 8);
+    ctx.fillStyle = T.line; ctx.fillText(CARD[i], p.x, p.y - 10);
     ctx.beginPath(); ctx.moveTo(p.x, p.y - 4); ctx.lineTo(p.x, p.y + 4); ctx.stroke();
   }
   ctx.textAlign = 'left';
@@ -201,7 +201,7 @@ function drawSunMoon(B, T, here) {
     g.addColorStop(0, 'rgba(255,250,225,.95)'); g.addColorStop(0.25, 'rgba(255,230,160,.55)'); g.addColorStop(1, 'rgba(255,210,120,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sp.x, sp.y, rS * 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fffbe8'; ctx.beginPath(); ctx.arc(sp.x, sp.y, rS * 0.6, 0, Math.PI * 2); ctx.fill();
-    if (onScreen(sp, -20)) label(sp.x, sp.y + rS + 14, 'Sun · don’t look directly', T, true);
+    if (onScreen(sp, -20)) label(sp.x, sp.y + rS + 18, 'Sun · don’t look directly', T, true);
   }
   const mp = project(fromAzEl(moon.az, moon.alt), B);
   if (moon.alt > -1 && onScreen(mp, 40)) {
@@ -216,12 +216,12 @@ function drawSunMoon(B, T, here) {
     const off = (moon.waxing ? -1 : 1) * moon.lit * 2 * r;
     ctx.beginPath(); ctx.arc(mp.x + off, mp.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    if (onScreen(mp, -20)) label(mp.x, mp.y + r + 14, `Moon · ${Math.round(moon.lit * 100)}% lit`, T, true);
+    if (onScreen(mp, -20)) label(mp.x, mp.y + r + 18, `Moon · ${Math.round(moon.lit * 100)}% lit`, T, true);
   }
 }
 function label(x, y, text, T, small) {
-  ctx.font = `${small ? 600 : 700} ${small ? 11 : 13}px -apple-system,system-ui,sans-serif`;
-  const w = ctx.measureText(text).width + 14, h = small ? 18 : 22;
+  ctx.font = `${small ? 600 : 700} ${small ? 14 : 16}px -apple-system,system-ui,sans-serif`;
+  const w = ctx.measureText(text).width + 18, h = small ? 24 : 28;
   ctx.fillStyle = T.pill; roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.fill();
   ctx.fillStyle = T.pillInk; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -253,7 +253,7 @@ function drawAircraft(B, T, here, now) {
         fore = Math.max(0.28, Math.min(1, len / ((1000 / it.sp.range) * FPX)));   // short = moving toward/away from you
       }
     }
-    const size = Math.max(22, Math.min(54, 2600 / Math.sqrt(it.sp.range)));
+    const size = Math.max(28, Math.min(60, 2900 / Math.sqrt(it.sp.range)));
     ctx.save();
     ctx.translate(s.x, s.y); ctx.rotate(ang + Math.PI / 2); ctx.scale(size / 24, (size / 24) * fore); ctx.translate(-12, -12);
     if (T.glow !== 'rgba(0,0,0,0)') { ctx.shadowColor = T.glow; ctx.shadowBlur = 14; }
@@ -268,20 +268,20 @@ function drawAircraft(B, T, here, now) {
     const name = O.flightLabel(it.a);
     const line2 = `${fmtAltShort(it.p.alt)} · ${fmtRange(it.sp.range)} · ${Math.round(it.sp.el)}° up`;
     const asp = aspect(it.sp, it.a);
-    ctx.font = '700 14px -apple-system,system-ui,sans-serif';
+    ctx.font = '700 18px -apple-system,system-ui,sans-serif';
     const w1 = ctx.measureText(name).width;
-    ctx.font = '500 11.5px -apple-system,system-ui,sans-serif';
+    ctx.font = '500 14.5px -apple-system,system-ui,sans-serif';
     const w2 = Math.max(ctx.measureText(line2).width, asp ? ctx.measureText(asp).width : 0);
-    const bw = Math.max(w1, w2) + 18, bh = asp ? 54 : 40;
+    const bw = Math.max(w1, w2) + 22, bh = asp ? 68 : 50;
     const bx = Math.max(8, Math.min(W - bw - 8, s.x - bw / 2));
     let by = s.y + size * 0.6 + 6;
     if (by + bh > H - 70) by = s.y - size * 0.6 - 6 - bh;           // near the bottom: put the label above
     const tx = bx + bw / 2;
     ctx.fillStyle = T.pill; roundRect(bx, by, bw, bh, 11); ctx.fill();
     ctx.fillStyle = T.pillInk; ctx.textAlign = 'center';
-    ctx.font = '700 14px -apple-system,system-ui,sans-serif'; ctx.fillText(name, tx, by + 17);
-    ctx.font = '500 11.5px -apple-system,system-ui,sans-serif'; ctx.globalAlpha = 0.85; ctx.fillText(line2, tx, by + 32);
-    if (asp) ctx.fillText(asp, tx, by + 46);
+    ctx.font = '700 18px -apple-system,system-ui,sans-serif'; ctx.fillText(name, tx, by + 21);
+    ctx.font = '500 14.5px -apple-system,system-ui,sans-serif'; ctx.globalAlpha = 0.9; ctx.fillText(line2, tx, by + 40);
+    if (asp) ctx.fillText(asp, tx, by + 58);
     ctx.globalAlpha = 1; ctx.textAlign = 'left';
     markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.8, box: [bx, by, bw, bh] });
   }
@@ -295,14 +295,14 @@ function drawAircraft(B, T, here, now) {
     const kx = (W / 2 - m) / Math.abs(Math.cos(ang) || 1e-6), ky = ((bottom - top) / 2) / Math.abs(Math.sin(ang) || 1e-6);
     const k = Math.min(kx, ky), ex = W / 2 + Math.cos(ang) * k;
     let ey = cy0 + Math.sin(ang) * k;
-    for (const q of placed) if (Math.abs(q.x - ex) < 90 && Math.abs(q.y - ey) < 46) ey += ey > cy0 ? -48 : 48;
+    for (const q of placed) if (Math.abs(q.x - ex) < 90 && Math.abs(q.y - ey) < 58) ey += ey > cy0 ? -60 : 60;
     placed.push({ x: ex, y: ey });
     ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
-    ctx.fillStyle = T.pill; ctx.beginPath(); ctx.arc(0, 0, 17, 0, 7); ctx.fill();
-    ctx.fillStyle = T.pillInk; ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-4, -7); ctx.lineTo(-4, 7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = T.pill; ctx.beginPath(); ctx.arc(0, 0, 20, 0, 7); ctx.fill();
+    ctx.fillStyle = T.pillInk; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-5, -8.5); ctx.lineTo(-5, 8.5); ctx.closePath(); ctx.fill();
     ctx.restore();
     const txt = `${O.flightLabel(it.a)} · ${fmtRange(it.sp.range)}`;
-    const lx = Math.max(60, Math.min(W - 60, ex - Math.cos(ang) * 4)), ly = ey + (ey > H / 2 ? -28 : 30);
+    const lx = Math.max(80, Math.min(W - 80, ex - Math.cos(ang) * 4)), ly = ey + (ey > H / 2 ? -34 : 36);
     label(lx, ly, txt, T, true);
   }
 }
