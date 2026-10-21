@@ -4,6 +4,15 @@
 'use strict';
 
 /* ---------- settings ---------- */
+// Pick units from the phone's region (e.g. en-US → imperial, nl-NL → metric). A saved choice always wins.
+function defaultUnits() {
+  try {
+    const tags = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en-US']);
+    let region = '';
+    for (const t of tags) { try { region = new Intl.Locale(t).maximize().region || ''; } catch { region = (t.split('-')[1] || '').toUpperCase(); } if (region) break; }
+    return ['US', 'GB', 'LR', 'MM', 'PR', 'GU', 'VI', 'AS', 'MP', 'UM'].includes(region) ? 'imperial' : 'metric';
+  } catch { return 'imperial'; }
+}
 const DEFAULTS = {
   source: 'auto',            // auto | airplaneslive | adsblol | adsbfi | local
   localUrl: '/tar1090/data/aircraft.json',
@@ -12,7 +21,7 @@ const DEFAULTS = {
   refreshSec: 10,
   locMode: 'gps',            // gps | fixed
   lat: null, lon: null,
-  units: 'imperial',
+  units: defaultUnits(),        // feet/mph/miles for US, UK, Liberia, Myanmar phones; metric elsewhere
   showGround: false,
   kiosk: false,
   demo: false,

@@ -58,6 +58,7 @@ Tap **Sky** (top right) and point your phone at the sky. The camera view shows e
 | Radius | 1–25 miles (default 5). |
 | Refresh | 5–60 seconds (default 10). The free APIs allow about 1 request per second per user, so anything 5 s or slower is polite. |
 | Location | Follow your phone, or a fixed point (patio, receiver site). |
+| Units | Picked from your phone's region: feet, mph and miles in the US and UK; metres, km/h and km elsewhere. Change it any time. |
 | Patio display mode | Large featured aircraft that rotates every 12 s, screen kept awake. |
 | Demo traffic | Simulated aircraft, for checking the app when nothing is flying. |
 
