@@ -278,7 +278,7 @@ const CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 /* ---------- rendering ---------- */
 let canvas, ctx, video, raf = 0, running = false, cameraOn = false, markers = [], hintSince = 0;
-let roll = 0, rollQ = 0;               // text tilt to stay level with the horizon; HUD turns in 90° steps
+let roll = 0, rollQ = 0, edgeHits = [];               // text tilt to stay level with the horizon; HUD turns in 90° steps
 function resize() {
   DPR = Math.min(2, window.devicePixelRatio || 1);
   W = canvas.clientWidth; H = canvas.clientHeight;
@@ -443,6 +443,7 @@ function drawAircraft(B, T, here, now) {
   // Off-screen aircraft: arrows on the edge pointing the way to turn.
   edge.sort((x, y) => x.it.sp.range - y.it.sp.range);
   const placed = [];
+  edgeHits = [];
   for (const { it, s } of edge.slice(0, 5)) {
     let dx = s.cx, dy = -s.cy;
     if (s.z <= 0.02 && Math.hypot(dx, dy) < 0.05) dy = 1;      // directly behind: suggest turning around
@@ -472,6 +473,7 @@ function drawAircraft(B, T, here, now) {
     }
     if (ey < M.top || ey > H - M.bottom || ex2 < M.left - 20 || ex2 > W - M.right + 20 || blocked(ex2, ey)) continue;   // no room: skip
     placed.push({ x: ex2, y: ey });
+    edgeHits.push({ hex: it.a.hex, x: ex2, y: ey, r: 30 });
     ctx.save(); ctx.translate(ex2, ey); ctx.rotate(ang);
     ctx.fillStyle = T.pill; ctx.beginPath(); ctx.arc(0, 0, 20, 0, 7); ctx.fill();
     ctx.fillStyle = T.pillInk; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-5, -8.5); ctx.lineTo(-5, 8.5); ctx.closePath(); ctx.fill();
@@ -479,6 +481,7 @@ function drawAircraft(B, T, here, now) {
     const txt = `${O.flightLabel(it.a)} · ${fmtRange(it.sp.range)}`;
     const [lx2, ly2] = lblAt(ex2, ey);
     label(lx2, ly2, 0, txt, T, true);
+    edgeHits.push({ hex: it.a.hex, x: lx2, y: ly2, r: rollQ % 2 ? 26 : 60, rx: rollQ % 2 ? 18 : 80, ry: rollQ % 2 ? 80 : 18 });
   }
 }
 function drawStatus(B) {
@@ -491,7 +494,7 @@ function drawStatus(B) {
   if (hint.dataset.locked) return;
   const msg = poor ? 'Compass needs calibrating: wave the phone in a figure 8.'
     : view.nudge ? `Aligned ${view.nudge > 0 ? '+' : ''}${Math.round(view.nudge)}° · double-tap to reset`
-    : 'Drag sideways to line a marker up with the real plane.';
+    : 'Tap a plane for details · drag sideways to line it up.';
   hint.textContent = msg;
   hint.hidden = !poor && performance.now() - hintSince > 6000;
 }
@@ -573,11 +576,11 @@ function close() {
 
 /* ---------- touch: tap a marker for details, drag sideways to align ---------- */
 let drag = null;
-function pointerDown(e) { drag = { x: e.clientX, y: e.clientY, start: view.nudge, moved: false }; }
+function pointerDown(e) { drag = { x: e.clientX, y: e.clientY, start: view.nudge, moved: false, t: performance.now() }; }
 function pointerMove(e) {
   if (!drag) return;
   const dx = e.clientX - drag.x;
-  if (Math.abs(dx) > 8) drag.moved = true;
+  if (Math.abs(dx) > 18) drag.moved = true;                    // small finger wobble still counts as a tap
   if (drag.moved) view.nudge = drag.start - deg(Math.atan(dx / FPX));
 }
 let lastTap = 0;
@@ -589,9 +592,12 @@ function pointerUp(e) {
   if (t - lastTap < 300) { view.nudge = 0; lastTap = 0; hintSince = performance.now(); return; }
   lastTap = t;
   const rect = canvas.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
-  const hit = [...markers].reverse().find(m => Math.hypot(m.x - x, m.y - y) < Math.max(30, m.r) ||
-    Math.hypot(m.lc[0] - x, m.lc[1] - y) < m.lr);
-  if (hit) O.openDetail(hit.hex);
+  // Hit test: the aircraft model, its label box (which may be tilted), then the edge arrows and their labels.
+  const inLabel = m => { const dx = x - m.lc[0], dy = y - m.lc[1], c = Math.cos(-roll), s = Math.sin(-roll);
+    return Math.abs(dx * c - dy * s) < m.box[2] / 2 + 12 && Math.abs(dx * s + dy * c) < m.box[3] / 2 + 12; };
+  const hit = [...markers].reverse().find(m => Math.hypot(m.x - x, m.y - y) < Math.max(44, m.r) || inLabel(m))
+    || edgeHits.find(h => h.rx ? Math.abs(x - h.x) < h.rx && Math.abs(y - h.y) < h.ry : Math.hypot(x - h.x, y - h.y) < h.r);
+  if (hit) { lastTap = 0; O.openDetail(hit.hex); }
 }
 
 document.addEventListener('DOMContentLoaded', init);
@@ -616,5 +622,5 @@ function init() {
 }
 
 // Exposed for testing the math without sensors.
-window.OverheadAR = { closure, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
+window.OverheadAR = { get _hits() { return { markers, edgeHits }; }, closure, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
 })();

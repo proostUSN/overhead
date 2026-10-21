@@ -722,7 +722,7 @@ function render() {
   $('stage').innerHTML = !state.list.length ? emptyHTML() : cfg.kiosk ? cardHTML(a) : state.list.map(cardHTML).join('');
   $('where').textContent = here ? `Within ${fmtDist(cfg.radiusMi).replace('.0 ', ' ')} of ${here.fixed ? 'your spot' : 'you'}` : 'Spot-Air';
   statusLine();
-  if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen); if (d) $('sheetInner').innerHTML = detailHTML(d); }
+  if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen) || (state.all || []).find(x => x.hex === sheetOpen); if (d) $('sheetInner').innerHTML = detailHTML(d); }
 }
 function statusLine() {
   const el = $('status'); let txt = '', cls = '';
@@ -738,7 +738,7 @@ function statusLine() {
 /* ---------- interaction (read-only: pick a tab, open details) ---------- */
 let sheetOpen = null;
 function openDetail(hex) {
-  const a = state.list.find(x => x.hex === hex); if (!a) return;
+  const a = state.list.find(x => x.hex === hex) || (state.all || []).find(x => x.hex === hex); if (!a) return;
   sheetOpen = hex;
   if (!cfg.demo) want('photo', a.hex, () => lookupPhoto({ ...a, reg: a.reg || enrich.ac.get(a.hex)?.reg }));
   $('sheetInner').innerHTML = detailHTML(a);
