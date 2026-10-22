@@ -159,7 +159,7 @@ async function getTraffic(lat, lon) {
   if (cfg.demo) return { list: demoTraffic(lat, lon), label: 'demo traffic' };
   if (cfg.source !== 'local' && !cfg.relay) { const e = new Error('needs relay'); e.needsRelay = true; e.source = 'Live data'; throw e; }
   const keys = cfg.source === 'auto' ? AUTO_ORDER : [cfg.source];
-  let lastErr;
+  const errs = [];
   for (let i = 0; i < keys.length; i++) {
     const key = cfg.source === 'auto' ? keys[(autoIdx + i) % keys.length] : keys[i];
     const src = SOURCES[key];
@@ -168,9 +168,17 @@ async function getTraffic(lat, lon) {
       const raw = await fetchJSON(src.url(lat, lon, Math.max(cfg.radiusMi, skyRangeMi)));
       if (cfg.source === 'auto') autoIdx = (autoIdx + i) % keys.length; // stick with what works
       return { list: normalize(raw), label: src.label };
-    } catch (e) { lastErr = e; lastErr.source = src.label; }
+    } catch (e) { e.source = src.label; errs.push(e); }
   }
-  throw lastErr || new Error('No data source');
+  if (!errs.length) throw new Error('No data source');
+  // Every request failed without an answer: the relay itself (or this phone's connection) is the problem.
+  const noAnswer = e => !e.status && (e.name === 'TypeError' || e.name === 'AbortError');
+  if (cfg.source !== 'local' && errs.every(noAnswer)) {
+    const e = new Error(navigator.onLine === false ? 'phone offline' : 'relay offline'); e.relayDown = true; e.source = 'Home relay'; throw e;
+  }
+  // Otherwise report the preferred network's answer, not whichever was tried last.
+  const first = errs.find(e => e.status) || errs[0];
+  const e = new Error(errs.map(x => `${x.source} ${x.status ? x.status : 'no answer'}`).join(', ')); e.source = 'Data'; e.detail = first; throw e;
 }
 
 /* ---------- enrichment: routes, aircraft records, photos ---------- */
@@ -351,11 +359,12 @@ async function poll(now) {
       state.wider = list.length;
       if (inside.length) state.last = { name: flightLabel(inside[0]), at: Date.now() };
       state.all = list.filter(a => !a.ground);                   // everything fetched (a little beyond the radius), for the sky view
+      state.relayDown = false;
       state.list = inside; state.label = label; state.updated = Date.now(); state.error = null; state.needsRelay = false;
       enrichTop(inside);
     } catch (e) {
       state.error = e.name === 'AbortError' ? 'timed out' : (e.message === 'Failed to fetch' ? 'blocked or offline' : e.message);
-      state.errorSource = e.source || ''; state.needsRelay = !!e.needsRelay;
+      state.errorSource = e.source || ''; state.needsRelay = !!e.needsRelay; state.relayDown = !!e.relayDown;
     }
   }
   render();
@@ -661,8 +670,10 @@ function emptyHTML() {
     body = 'The free ADS-B networks don’t let web pages read them directly. Add your relay address in Settings; the steps are in the project README.';
     actions = `<button class="pill" data-act="settings" type="button">Open Settings</button><button class="pill" data-act="demo" type="button">Show demo</button>`;
   } else if (state.error) {
-    head = 'Flight data is unavailable';
-    body = cfg.source === 'local' ? `Your receiver didn’t answer (${esc(state.error)}).` : `The data feed didn’t answer (${esc(state.error)}). Retrying every ${cfg.refreshSec} s.`;
+    head = state.relayDown ? (state.error === 'phone offline' ? 'No internet connection' : 'Home relay is offline') : 'Flight data is unavailable';
+    body = cfg.source === 'local' ? `Your receiver didn’t answer (${esc(state.error)}).`
+      : state.relayDown ? (state.error === 'phone offline' ? `This phone is offline. Retrying every ${cfg.refreshSec} s.` : `The relay that fetches flight data isn’t reachable. If it runs on your NAS, check that the NAS is on and connected. Retrying every ${cfg.refreshSec} s.`)
+      : `The flight networks didn’t answer (${esc(state.error)}). Retrying every ${cfg.refreshSec} s.`;
     actions = `<button class="pill" data-act="retry" type="button">Retry now</button>`;
   } else if (!state.updated) { head = 'Looking up…'; body = 'Checking the sky around you.'; }
   else if (state.last) body += ` Last seen: ${esc(state.last.name)} at ${new Date(state.last.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`;
@@ -735,7 +746,7 @@ function render() {
 }
 function statusLine() {
   const el = $('status'); let txt = '', cls = '';
-  if (state.error || state.needsRelay) { cls = 'err'; txt = state.needsRelay ? 'Relay not set' : `${state.errorSource || 'Data'}: ${state.error}`; }
+  if (state.error || state.needsRelay) { cls = 'err'; txt = state.needsRelay ? 'Relay not set' : state.relayDown ? (state.error === 'phone offline' ? 'No internet connection' : 'Home relay offline · retrying') : `${state.errorSource || 'Data'}: ${state.error}`; }
   else if (state.updated) {
     const age = Math.round((Date.now() - state.updated) / 1000);
     if (age > cfg.refreshSec * 3) cls = 'stale';
