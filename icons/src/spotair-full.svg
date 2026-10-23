@@ -16,7 +16,7 @@
 <path d="M0 880 C 260 840 520 860 1024 830 L1024 1024 L0 1024 Z" fill="#23264f"/>
 
 <g transform="translate(346 374) scale(1.35)">
-  <path d="M -148 26 C -192 26 -192 -20 -148 -20 L -16 -20 L 32 -84 L 60 -78 L 28 -20 L 80 -20 L 142 -70 L 172 -66 L 112 26 C 40 31 -60 31 -148 26 Z" fill="#3a3672" fill-opacity=".95" stroke="#fff" stroke-width="13" stroke-linejoin="round"/>
+  <path d="M -148 26 C -192 26 -192 -20 -148 -20 L -16 -20 L 32 -84 L 60 -78 L 28 -20 L 80 -20 L 142 -70 L 172 -66 L 112 26 C 40 31 -60 31 -148 26 Z" fill="#fff" stroke="#fff" stroke-width="13" stroke-linejoin="round"/>
 </g>
 <g>
   <rect x="402" y="712" width="220" height="176" fill="#15183a"/>
