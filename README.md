@@ -2,7 +2,10 @@
 
 A flight tracker for your phone: every aircraft within a few miles of you, with its route, type, altitude, speed, direction and a photo. It uses free, community-run ADS-B networks, so there are no accounts or API keys. The same app runs on a Raspberry Pi patio display, and can read straight from your own ADS-B receiver.
 
-**Open it:** https://proostusn.github.io/overhead/
+**Open it:** https://spotair.roosfamily.com (the old address, https://proostusn.github.io/overhead/, redirects there)
+
+### Custom domain
+The app is served by GitHub Pages at `spotair.roosfamily.com`: a DNS CNAME record `spotair` → `proostusn.github.io`, and the domain set in the repo under Settings → Pages → Custom domain, with Enforce HTTPS on. The relay only answers pages it knows, so the domain is also listed in `ALLOWED_ORIGINS` in `nas/docker-compose.yml`.
 
 ## How live data reaches the app
 

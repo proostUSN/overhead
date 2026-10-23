@@ -15,6 +15,7 @@ const ALLOWED_HOSTS = new Set([
 // Pages allowed to use this relay. Add your own domain here if you host the app elsewhere.
 const ALLOWED_ORIGINS = [
   'https://proostusn.github.io',
+  'https://spotair.roosfamily.com',
 ];
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|[\w-]+\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
 

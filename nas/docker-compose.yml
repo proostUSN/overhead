@@ -51,7 +51,7 @@ services:
     environment:
       HOST: 127.0.0.1
       PORT: "8787"
-      ALLOWED_ORIGINS: https://proostusn.github.io
+      ALLOWED_ORIGINS: https://proostusn.github.io,https://spotair.roosfamily.com
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
