@@ -1,21 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
 <defs><linearGradient id="g" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#2b3a78"/><stop offset=".55" stop-color="#8a5a96"/><stop offset="1" stop-color="#f2a76f"/></linearGradient>
-<radialGradient id="glow" cx="512" cy="350" r="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity=".18"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+<radialGradient id="glow" cx="340" cy="360" r="440" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity=".22"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+<linearGradient id="trail" x1="340" y1="0" x2="1024" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity=".25"/></linearGradient>
 <clipPath id="c"><rect width="1024" height="1024" rx="228"/></clipPath></defs>
 <g clip-path="url(#c)">
 <rect width="1024" height="1024" fill="url(#g)"/>
-<ellipse cx="512" cy="980" rx="420" ry="200" fill="#ffd09a" opacity=".28"/>
-<ellipse cx="512" cy="1010" rx="700" ry="140" fill="rgba(20,22,48,.35)"/>
-<circle cx="512" cy="350" r="260" fill="url(#glow)"/>
-<circle cx="512" cy="350" r="178" fill="none" stroke="#fff" stroke-width="16" opacity=".95"/>
-<circle cx="512" cy="350" r="112" fill="none" stroke="#fff" stroke-width="12" opacity=".8"/>
-<line x1="512" y1="114" x2="512" y2="162" stroke="#fff" stroke-width="16" stroke-linecap="round"/><line x1="276" y1="350" x2="324" y2="350" stroke="#fff" stroke-width="16" stroke-linecap="round"/><line x1="700" y1="350" x2="748" y2="350" stroke="#fff" stroke-width="16" stroke-linecap="round"/><line x1="512" y1="538" x2="512" y2="564" stroke="#fff" stroke-width="16" stroke-linecap="round"/>
-<g transform="translate(512 350) rotate(45) scale(6.6) translate(-12 -12)"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="#fff" stroke="#1f2347" stroke-width=".7" stroke-linejoin="round"/></g>
+<circle cx="340" cy="360" r="440" fill="url(#glow)"/>
+<circle cx="340" cy="360" r="420" fill="none" stroke="#fff" stroke-width="20" opacity=".9"/>
+<circle cx="340" cy="360" r="270" fill="none" stroke="#fff" stroke-width="16" opacity=".85"/>
+<circle cx="340" cy="360" r="135" fill="none" stroke="#fff" stroke-width="12" opacity=".75"/>
+<line x1="340" y1="56" x2="340" y2="124" stroke="#fff" stroke-width="16" stroke-linecap="round" opacity=".85"/>
+<line x1="340" y1="596" x2="340" y2="664" stroke="#fff" stroke-width="16" stroke-linecap="round" opacity=".85"/>
+<line x1="340" y1="360" x2="1060" y2="360" stroke="url(#trail)" stroke-width="14" stroke-linecap="round"/>
+<path d="M0 792 C 220 742 380 758 512 772 C 690 790 860 742 1024 752 L1024 1024 L0 1024 Z" fill="#2e3266"/>
+<path d="M0 880 C 260 840 520 860 1024 830 L1024 1024 L0 1024 Z" fill="#23264f"/>
+
+<g transform="translate(340 360) scale(1.08)" stroke="#1f2347" stroke-width="5" stroke-linejoin="round" fill="#fff">
+  <path d="M -30 -15 L 58 -128 L 84 -128 L 42 -15 Z"/><path d="M -30 -15 L 58 -128 L 84 -128 L 42 -15 Z" transform="scale(1 -1)"/>
+  <path d="M 96 -11 L 134 -56 L 148 -56 L 130 -9 Z"/><path d="M 96 -11 L 134 -56 L 148 -56 L 130 -9 Z" transform="scale(1 -1)"/>
+  <ellipse cx="-14" cy="-58" rx="26" ry="10"/><ellipse cx="-14" cy="58" rx="26" ry="10"/>
+  <path d="M -138 0 C -138 -12 -125 -17 -106 -17 L 108 -14 C 124 -13 140 -8 146 0 C 140 8 124 13 108 14 L -106 17 C -125 17 -138 12 -138 0 Z"/>
+  <path d="M 112 0 L 150 0" stroke-width="6"/>
+</g>
 <g>
-  <rect x="402" y="712" width="220" height="176" fill="#1f2347"/>
-  <path d="M372 724 L512 600 L652 724 Z" fill="#1f2347" stroke="#1f2347" stroke-width="16" stroke-linejoin="round"/>
-  <rect x="582" y="618" width="34" height="74" fill="#1f2347"/>
+  <rect x="402" y="712" width="220" height="176" fill="#15183a"/>
+  <path d="M372 724 L512 600 L652 724 Z" fill="#15183a" stroke="#15183a" stroke-width="16" stroke-linejoin="round"/>
+  <rect x="582" y="618" width="34" height="74" fill="#15183a"/>
   <rect x="432" y="752" width="64" height="56" rx="6" fill="#ffcf6b"/>
-  <rect x="528" y="784" width="58" height="104" rx="6" fill="#14172f"/>
+  <rect x="528" y="784" width="58" height="104" rx="6" fill="#0d0f26"/>
 </g>
 </g></svg>

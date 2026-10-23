@@ -46,14 +46,22 @@ function onOrientation(e) {
   if (e.alpha == null || e.beta == null || e.gamma == null) return;
   const b = cameraBasis(e.alpha, e.beta, e.gamma, screenAngle());
   if (e.webkitCompassHeading != null && e.webkitCompassHeading >= 0) {
-    // iPhone: alpha is relative to an arbitrary start. Tie it to the compass while the camera is within ~45°
-    // of the horizon (where iOS reports the heading of the back camera); keep that offset when looking up.
+    // iPhone: alpha is relative to an arbitrary start, so tie it to the compass. Which way iOS's compass
+    // heading points depends on how the phone is held: upright in portrait (top of the phone pointing up)
+    // it is the back camera's direction; with the top of the phone level (sideways/landscape, or flat)
+    // it is the direction the top of the phone points, 90° from the camera when held sideways.
+    // Learn the offset only in those two clear poses, and keep it in between (the gyro carries it).
     view.absolute = false;
     view.accuracy = e.webkitCompassAccuracy;
-    const horiz = Math.hypot(b.f[0], b.f[1]);
-    if (horiz > 0.7 || view.offset == null) {
-      const camAz = deg(Math.atan2(b.f[0], b.f[1]));
-      const target = wrap180(e.webkitCompassHeading - camAz);
+    const Y = deviceAxes(e.alpha, e.beta, e.gamma).Y;
+    const camH = Math.hypot(b.f[0], b.f[1]), topH = Math.hypot(Y[0], Y[1]);
+    const camAz = deg(Math.atan2(b.f[0], b.f[1])), topAz = deg(Math.atan2(Y[0], Y[1]));
+    let refAz = null;
+    if (camH > 0.7 && topH < 0.4) refAz = camAz;            // upright, portrait
+    else if (topH > 0.85) refAz = topAz;                     // sideways (landscape) or lying flat
+    else if (view.offset == null) refAz = topH > 0.6 ? topAz : camAz;
+    if (refAz != null) {
+      const target = wrap180(e.webkitCompassHeading - refAz);
       view.offset = view.offset == null ? target : view.offset + wrap180(target - view.offset) * 0.08;
     }
   } else if (e.absolute || e.type === 'deviceorientationabsolute') {
@@ -622,5 +630,5 @@ function init() {
 }
 
 // Exposed for testing the math without sensors.
-window.OverheadAR = { get _hits() { return { markers, edgeHits }; }, closure, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
+window.OverheadAR = { get _hits() { return { markers, edgeHits }; }, onOrientation, currentBasis, _view: view, closure, classOf, attitude, buildMesh, deviceAxes, cameraBasis, fromAzEl, project: (v, B, w, h) => { W = w; H = h; FPX = (Math.max(w, h) / 2) / Math.tan(rad(LONG_FOV / 2)); return project(v, B); }, aspect, skyPoint };
 })();
