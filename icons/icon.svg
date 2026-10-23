@@ -18,7 +18,7 @@
 <g transform="translate(346 374) scale(1.35)">
   <path d="M -148 26 C -192 26 -192 -20 -148 -20 L -16 -20 L 32 -84 L 60 -78 L 28 -20 L 80 -20 L 142 -70 L 172 -66 L 112 26 C 40 31 -60 31 -148 26 Z" fill="#fff" stroke="#fff" stroke-width="13" stroke-linejoin="round"/>
 </g>
-<g>
+<g transform="translate(512 888) scale(1.5) translate(-512 -888)">
   <rect x="402" y="712" width="220" height="176" fill="#15183a"/>
   <path d="M372 724 L512 600 L652 724 Z" fill="#15183a" stroke="#15183a" stroke-width="16" stroke-linejoin="round"/>
   <rect x="582" y="618" width="34" height="74" fill="#15183a"/>
