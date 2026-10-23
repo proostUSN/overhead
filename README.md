@@ -78,6 +78,22 @@ Your exact location never leaves your device. Flight-data queries (and the relay
 
 If one network is down, **Automatic** moves to the next one. Running your own receiver (below) removes the dependency on all three for positions.
 
+## Move the relay to a Raspberry Pi
+
+The relay can run on a Raspberry Pi instead of the Synology, with the same lock-down and the same Tailscale Funnel tunnel (no router ports). Any Pi 3/4/5 or Pi Zero 2 W works; a Pi 4/5 can also run the patio display and a receiver later.
+
+1. **Prepare the card on your Mac:** install Raspberry Pi Imager, choose **Raspberry Pi OS Lite (64-bit)**, and in its settings set the hostname `spotair`, a username and password, Wi-Fi (if not using a cable), and **enable SSH**. Write the card, put it in the Pi, connect it to your router and power it on.
+2. **Free the old name:** stop the Synology project (Container Manager > Project > overhead-relay > Stop), then in Tailscale > Machines remove `overhead-relay`.
+3. **Make a new key:** Tailscale > Settings > Keys > Generate auth key (Reusable off, Ephemeral off; add the tag `tag:relay` if your policy limits Funnel to that tag).
+4. **Run the setup** from your Mac's Terminal:
+   ```bash
+   ssh yourname@spotair.local
+   curl -fsSL https://raw.githubusercontent.com/proostUSN/overhead/main/pi/setup-relay.sh -o setup-relay.sh
+   bash setup-relay.sh
+   ```
+   Paste the key when asked. The script installs updates and Docker, starts the relay, turns on automatic security updates and a weekly container refresh, and prints the relay address. If it's `overhead-relay.tail71c8a7.ts.net`, the app keeps working with no changes.
+5. Once it's working, you can delete the Synology project and uninstall Container Manager.
+
 ## Raspberry Pi patio display
 
 ### What to get
@@ -138,6 +154,7 @@ cd ~/overhead && git pull
 | `sw.js` | Service worker: app works offline as a shell, caches photos |
 | `manifest.webmanifest`, `icons/` | Home-screen install |
 | `pi/kiosk.sh` | Full-screen launcher for the Pi |
+| `pi/setup-relay.sh` | One-command relay setup on a Raspberry Pi |
 | `relay/worker.js` | Cloudflare Worker that adds CORS to the free feeds |
 
 No build step. To run locally: `python3 -m http.server 8000`, then open http://localhost:8000/?demo=1
