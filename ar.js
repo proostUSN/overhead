@@ -44,6 +44,11 @@ function screenAngle() {
 }
 function onOrientation(e) {
   if (e.alpha == null || e.beta == null || e.gamma == null) return;
+  // Android Chrome sends two streams: north-referenced ('deviceorientationabsolute') and one whose zero is
+  // wherever the phone pointed at start ('deviceorientation'). Mixing them makes the view spin, so once a
+  // north-referenced reading has arrived, ignore the other stream.
+  const isAbs = e.type === 'deviceorientationabsolute' || (e.absolute === true && e.webkitCompassHeading == null);
+  if (view.absolute && !isAbs) return;
   const b = cameraBasis(e.alpha, e.beta, e.gamma, screenAngle());
   if (e.webkitCompassHeading != null && e.webkitCompassHeading >= 0) {
     // iPhone: alpha is relative to an arbitrary start, so tie it to the compass. Which way iOS's compass
