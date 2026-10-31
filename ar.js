@@ -540,6 +540,14 @@ function frame() {
   if (!B || !here) {
     ctx.fillStyle = cameraOn ? 'rgba(0,0,0,.35)' : '#0d1a3c'; ctx.fillRect(0, 0, W, H);
     $('ar-facing').textContent = !here ? 'Waiting for your location…' : 'Waiting for the compass…';
+    const hint = $('ar-hint');
+    if (here && !view.raw && !hint.dataset.locked && performance.now() - hintSince > 4000) {
+      // No sensor readings at all. On Android there is no prompt, so say where the switch is.
+      hint.hidden = false;
+      hint.textContent = /Android/i.test(navigator.userAgent)
+        ? 'No compass readings. Open this site in Chrome, then ⋮ → Settings → Site settings → Motion sensors → Allowed. Also turn off battery saver. Then reopen the app.'
+        : 'No compass readings. iPhone: Settings → Safari → Motion & Orientation Access on, then reopen the app.';
+    }
     return;
   }
   updateRoll(B);
