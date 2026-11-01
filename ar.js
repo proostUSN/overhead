@@ -564,16 +564,29 @@ function frame() {
 }
 
 /* ---------- open / close ---------- */
+let motionGranted = false, camStream = null, camRelease = 0;
+function releaseCamera() {
+  clearTimeout(camRelease); camRelease = 0;
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && !running) releaseCamera(); });
 async function open() {
   const sheet = $('ar'); sheet.hidden = false; document.body.classList.add('ar-open');
   canvas = $('ar-canvas'); ctx = canvas.getContext('2d'); video = $('ar-video');
   resize();
-  // Both permissions must be asked from this tap.
-  const motion = (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
-    ? DeviceOrientationEvent.requestPermission().catch(() => 'denied') : Promise.resolve('granted');
-  const cam = navigator.mediaDevices?.getUserMedia
-    ? navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).catch(() => null) : Promise.resolve(null);
+  // Both permissions must be asked from this tap. iPhone home-screen apps don't remember the answers, so ask
+  // only when needed: motion once per app launch, and the camera only if the last stream was released.
+  const motion = motionGranted || !(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+    ? Promise.resolve('granted') : DeviceOrientationEvent.requestPermission().catch(() => 'denied');
+  clearTimeout(camRelease); camRelease = 0;
+  const live = camStream && camStream.getVideoTracks().some(t => t.readyState === 'live');
+  const cam = live ? Promise.resolve(camStream)
+    : navigator.mediaDevices?.getUserMedia
+      ? navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).catch(() => null) : Promise.resolve(null);
   const [m, stream] = await Promise.all([motion, cam]);
+  if (m === 'granted') motionGranted = true;
+  camStream = stream;
+  if (stream) stream.getTracks().forEach(t => { t.enabled = true; });
   hintSince = performance.now(); $('ar-hint').hidden = false; delete $('ar-hint').dataset.locked;
   if (m !== 'granted') { $('ar-hint').textContent = 'Motion access was declined. Close the app fully, reopen it and tap Sky again, then choose Allow.'; $('ar-hint').dataset.locked = '1'; }
   window.addEventListener('deviceorientationabsolute', onOrientation, true);
@@ -589,7 +602,10 @@ function close() {
   running = false; cancelAnimationFrame(raf);
   window.removeEventListener('deviceorientationabsolute', onOrientation, true);
   window.removeEventListener('deviceorientation', onOrientation, true);
-  if (video?.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+  // Keep the camera stream briefly (paused) so reopening the sky view soon doesn't prompt again;
+  // it is released after 2 minutes, or right away if the app goes to the background.
+  if (video?.srcObject) video.srcObject = null;
+  if (camStream) { camStream.getTracks().forEach(t => { t.enabled = false; }); camRelease = setTimeout(releaseCamera, 120000); }
   cameraOn = false; view.basis = null;
   O.setSkyRange(0);
   $('ar').hidden = true; document.body.classList.remove('ar-open');
