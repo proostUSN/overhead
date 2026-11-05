@@ -14,7 +14,7 @@ function defaultUnits() {
   } catch { return 'imperial'; }
 }
 const DEFAULTS = {
-  source: 'auto',            // auto | airplaneslive | adsblol | adsbfi | local
+  source: 'auto',            // auto | airplaneslive | adsblol | adsbfi | flyitaly | local
   localUrl: '/tar1090/data/aircraft.json',
   relay: '',                 // relay that lets the page read the free feeds (nas/ for a home server)
   radiusMi: 5,
@@ -121,6 +121,8 @@ const SOURCES = {
   airplaneslive: { label: 'airplanes.live', url: (lat, lon, mi) => viaRelay(`https://api.airplanes.live/v2/point/${lat.toFixed(2)}/${lon.toFixed(2)}/${nmFor(mi)}`) },
   adsblol:       { label: 'adsb.lol',       url: (lat, lon, mi) => viaRelay(`https://api.adsb.lol/v2/point/${lat.toFixed(2)}/${lon.toFixed(2)}/${nmFor(mi)}`) },
   adsbfi:        { label: 'adsb.fi',        url: (lat, lon, mi) => viaRelay(`https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(2)}/lon/${lon.toFixed(2)}/dist/${nmFor(mi)}`) },
+  // FlyItalyADSB: commercial use allowed; radius in km; its key is kept on the relay. Credit: FlyItalyADSB (CC BY-SA 4.0).
+  flyitaly:      { label: 'FlyItalyADSB',   url: (lat, lon, mi) => viaRelay(`https://api.flyitalyadsb.com/v2/lat/${lat.toFixed(2)}/lon/${lon.toFixed(2)}/dist/${Math.min(500, Math.ceil(nmFor(mi) * 1.852))}`) },
   local:         { label: 'your receiver',  url: () => cfg.localUrl },
 };
 const AUTO_ORDER = ['adsblol', 'adsbfi', 'airplaneslive']; // airplanes.live currently refuses relays
