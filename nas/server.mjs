@@ -2,7 +2,8 @@
 // Lets the Overhead web app read the free ADS-B networks from your home connection.
 //
 // Safety design:
-//  - forwards ONLY to the three flight-data hosts below; nothing else, no files, no local network
+//  - forwards ONLY to the flight-data hosts below; nothing else, no files, no local network
+//  - API keys (e.g. FlyItalyADSB) live here in the relay's settings, never in the public app
 //  - answers only the app's own web page (CORS origin check)
 //  - shares each answer for a few seconds, so many viewers cost one upstream request
 //  - limits each visitor and the relay as a whole, so a stranger can't run up your home IP
@@ -12,7 +13,10 @@ import http from 'node:http';
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';          // only reachable via Tailscale in the same container network
 
-const ALLOWED_HOSTS = new Set(['api.airplanes.live', 'api.adsb.lol', 'opendata.adsb.fi']);
+const ALLOWED_HOSTS = new Set(['api.airplanes.live', 'api.adsb.lol', 'opendata.adsb.fi', 'api.flyitalyadsb.com']);
+// Hosts that need a key: the key is added here, from the relay's environment. FlyItalyADSB's free plan allows 30/min.
+const HOST_KEYS = { 'api.flyitalyadsb.com': { header: 'X-Api-Key', env: 'FLYITALY_KEY', perMin: 28 } };
+const hostHits = new Map();       // host -> [timestamps]
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || 'https://proostusn.github.io').split(',').map(s => s.trim()).filter(Boolean));
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|[\w-]+\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
 
@@ -87,9 +91,17 @@ const server = http.createServer(async (req, res) => {
       const hit = cache.get(key);
       if (hit && now - hit.at < CACHE_MS) return send(res, hit.status, { ...h, 'Content-Type': hit.type, 'X-Relay-Cache': 'hit' }, hit.body);
     }
+    const keyed = HOST_KEYS[target.hostname];
+    if (keyed && !process.env[keyed.env]) return send(res, 503, { ...h, 'Content-Type': 'text/plain' }, 'No key set for this network on the relay');
+    if (keyed) {
+      const hits = (hostHits.get(target.hostname) || []).filter(t => now - t < 60_000);
+      if (hits.length >= keyed.perMin) { hostHits.set(target.hostname, hits); return send(res, 429, { ...h, 'Retry-After': '10' }, 'Relay busy'); }
+      hits.push(now); hostHits.set(target.hostname, hits);
+    }
     if (!allowUpstream(now)) return send(res, 429, { ...h, 'Retry-After': '10' }, 'Relay busy');
 
     const init = { method: req.method, headers: { 'User-Agent': UA, 'Accept': 'application/json' }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) };
+    if (keyed) init.headers[keyed.header] = process.env[keyed.env];
     if (req.method === 'POST') { init.headers['Content-Type'] = 'application/json'; init.body = await readBody(req); }
     const up = await fetch(key, init);
     const body = Buffer.from(await up.arrayBuffer());
