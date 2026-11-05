@@ -402,19 +402,22 @@ function fmtAltShort(ft) { return O.metric ? `${Math.round(ft * 0.3048).toLocale
 function fmtRange(m) { return O.metric ? `${(m / 1000).toFixed(1)} km` : `${(m / 1609.344).toFixed(1)} mi`; }
 
 const GOLD = '#ffcf4a', GOLD_INK = '#1b1405';
-// The tracked flight beyond the sky view's range: a gold target on (or above) the horizon, in its true direction.
-function drawTrackedFar(it, s, T) {
-  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
-  ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, 7); ctx.stroke();
-  ctx.globalAlpha = 0.35 + 0.4 * pulse; ctx.beginPath(); ctx.arc(s.x, s.y, 26 + 6 * pulse, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
-  ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, 7); ctx.fill();
+// The tracked flight beyond the sky view's range: drawn like the others (same 3D model, lights, heading and
+// halo), a little smaller, on (or just above) the horizon in its true direction, with a gold ring.
+function drawTrackedFar(it, s, T, B, light, now) {
+  const kind = classOf(it.a), size = 58 * CLASSES[kind].scale;
+  const hc = HALO[closure(O.here, it.p, it.a)], hr = size * 0.78;
+  const hg = ctx.createRadialGradient(s.x, s.y, size * 0.12, s.x, s.y, hr);
+  hg.addColorStop(0, `rgba(${hc},${T.phase === 'day' ? 0.42 : 0.5})`); hg.addColorStop(0.6, `rgba(${hc},${T.phase === 'day' ? 0.2 : 0.26})`); hg.addColorStop(1, `rgba(${hc},0)`);
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(s.x, s.y, hr, 0, Math.PI * 2); ctx.fill();
+  drawModel(kind, it.a, s.x, s.y, size, it.v, B, T, light, now);
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, size * 0.62, 0, 7); ctx.stroke();
   const el = it.sp.el, mi = it.sp.dM / 1609.344;
   const where = el < 0 ? 'below the horizon' : `${Math.max(1, Math.round(el))}° up`;
   const line1 = `★ ${O.flightLabel(it.a)}`, line2 = `${O.metric ? Math.round(mi * 1.609) + ' km' : Math.round(mi) + ' mi'} · ${where}`;
   ctx.font = '700 17px -apple-system,system-ui,sans-serif'; const w1 = ctx.measureText(line1).width;
   ctx.font = '500 14px -apple-system,system-ui,sans-serif'; const w2 = ctx.measureText(line2).width;
-  const bw = Math.max(w1, w2) + 22, bh = 50, off = -(40 + bh);            // label above the target, clear of the ground
+  const bw = Math.max(w1, w2) + 22, bh = 50, off = -(size * 0.62 + 10 + bh);   // label above the plane, clear of the ground
   leveled(s.x, s.y, () => {
     ctx.fillStyle = GOLD; roundRect(-bw / 2, off, bw, bh, 11); ctx.fill();
     ctx.fillStyle = GOLD_INK; ctx.textAlign = 'center';
@@ -422,7 +425,7 @@ function drawTrackedFar(it, s, T) {
     ctx.font = '500 14px -apple-system,system-ui,sans-serif'; ctx.fillText(line2, 0, off + 40);
   });
   const ly = s.y + Math.cos(roll) * (off + bh / 2), lx = s.x - Math.sin(roll) * (off + bh / 2);
-  markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: 34, box: [lx - bw / 2, ly - bh / 2, bw, bh], lc: [lx, ly], lr: Math.max(bw, bh) / 2 });
+  markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.6, box: [lx - bw / 2, ly - bh / 2, bw, bh], lc: [lx, ly], lr: Math.max(bw, bh) / 2 });
 }
 function drawAircraft(B, T, here, now) {
   markers = [];
@@ -442,7 +445,7 @@ function drawAircraft(B, T, here, now) {
   for (const it of items) {
     const s = project(it.v, B);
     if (!onScreen(s, 10)) { edge.push({ it, s }); continue; }
-    if (it.far) { drawTrackedFar(it, s, T); continue; }
+    if (it.far) { drawTrackedFar(it, s, T, B, light, now); continue; }
     if (it.isTr) { ctx.strokeStyle = GOLD; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(72, Math.min(170, 6400 / Math.sqrt(it.sp.range))) * 0.62, 0, 7); ctx.stroke(); }
     const kind = classOf(it.a);
     const size = Math.max(72, Math.min(170, 6400 / Math.sqrt(it.sp.range))) * CLASSES[kind].scale;
