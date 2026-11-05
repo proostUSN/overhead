@@ -5,7 +5,7 @@
 # What runs:
 #   tailscale – gives the relay a private-to-public HTTPS address via Tailscale Funnel.
 #               No router ports are opened; nothing listens on your home network.
-#   relay     – ~150 lines of Node (nas/server.mjs) that forwards only to three flight-data sites.
+#   relay     – ~150 lines of Node (nas/server.mjs) that forwards only to a few flight-data sites.
 #               It runs inside Tailscale's network space on 127.0.0.1, so even devices on your
 #               own Wi-Fi can't reach it directly.
 #
@@ -52,12 +52,13 @@ services:
       HOST: 127.0.0.1
       PORT: "8787"
       ALLOWED_ORIGINS: https://proostusn.github.io,https://spotair.roosfamily.com
+      FLYITALY_KEY: ""   # optional: paste a free FlyItalyADSB key between the quotes
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
-        wget -qO /tmp/server.mjs https://raw.githubusercontent.com/proostUSN/overhead/0a51fdc67e28c331206cf917b00a20078a4e8d5b/nas/server.mjs
-        echo "6cad8320c5668f0334843cd933f0374ed1c8ba3baed0eed1a6f202d83e238233  /tmp/server.mjs" | sha256sum -c -
+        wget -qO /tmp/server.mjs https://raw.githubusercontent.com/proostUSN/overhead/24831840ba5727278ae4ed462865c5fc41c63af0/nas/server.mjs
+        echo "715d6ea7326eb34b0f6cec93b0cca75525c85db7d4d1f59f6f780dd5b40bd6fd  /tmp/server.mjs" | sha256sum -c -
         exec node /tmp/server.mjs
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
