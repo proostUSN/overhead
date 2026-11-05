@@ -51,7 +51,7 @@ services:
     environment:
       HOST: 127.0.0.1
       PORT: "8787"
-      ALLOWED_ORIGINS: https://proostusn.github.io,https://spotair.roosfamily.com
+      ALLOWED_ORIGINS: https://proostusn.github.io,https://spotair.roosfamily.com,https://spot-air.com,https://www.spot-air.com
       FLYITALY_KEY: ""   # optional: paste a free FlyItalyADSB key between the quotes
     entrypoint: ["/bin/sh", "-c"]
     command:
