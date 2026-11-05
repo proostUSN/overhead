@@ -103,8 +103,8 @@ const onScreen = (p, m = 0) => p.z > 0.02 && p.x > -m && p.x < W + m && p.y > -m
 
 /* ---------- aircraft geometry ---------- */
 const R_EARTH = 6371000, M_PER_DEG = 111320;
-function extrapolate(a, now) {
-  const age = Math.min(60, Math.max(0, (now - (O.updated || now)) / 1000 + (a.seenPos || 0)));
+function extrapolate(a, now, since) {
+  const age = Math.min(60, Math.max(0, (now - (since || O.updated || now)) / 1000 + (a.seenPos || 0)));
   let { lat, lon } = a, alt = a.alt;
   if (a.gs != null && a.track != null) {
     const d = a.gs * 0.514444 * age;
@@ -401,19 +401,49 @@ function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.a
 function fmtAltShort(ft) { return O.metric ? `${Math.round(ft * 0.3048).toLocaleString()} m` : ft >= 18000 ? `FL${Math.round(ft / 100)}` : `${Math.round(ft / 100) * 100 >= 1000 ? (Math.round(ft / 100) * 100).toLocaleString() : Math.round(ft)} ft`; }
 function fmtRange(m) { return O.metric ? `${(m / 1000).toFixed(1)} km` : `${(m / 1609.344).toFixed(1)} mi`; }
 
+const GOLD = '#ffcf4a', GOLD_INK = '#1b1405';
+// The tracked flight beyond the sky view's range: a gold target on (or above) the horizon, in its true direction.
+function drawTrackedFar(it, s, T) {
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, 7); ctx.stroke();
+  ctx.globalAlpha = 0.35 + 0.4 * pulse; ctx.beginPath(); ctx.arc(s.x, s.y, 26 + 6 * pulse, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, 7); ctx.fill();
+  const el = it.sp.el, mi = it.sp.dM / 1609.344;
+  const where = el < 0 ? 'below the horizon' : `${Math.max(1, Math.round(el))}° up`;
+  const line1 = `★ ${O.flightLabel(it.a)}`, line2 = `${O.metric ? Math.round(mi * 1.609) + ' km' : Math.round(mi) + ' mi'} · ${where}`;
+  ctx.font = '700 17px -apple-system,system-ui,sans-serif'; const w1 = ctx.measureText(line1).width;
+  ctx.font = '500 14px -apple-system,system-ui,sans-serif'; const w2 = ctx.measureText(line2).width;
+  const bw = Math.max(w1, w2) + 22, bh = 50, off = -(40 + bh);            // label above the target, clear of the ground
+  leveled(s.x, s.y, () => {
+    ctx.fillStyle = GOLD; roundRect(-bw / 2, off, bw, bh, 11); ctx.fill();
+    ctx.fillStyle = GOLD_INK; ctx.textAlign = 'center';
+    ctx.font = '700 17px -apple-system,system-ui,sans-serif'; ctx.fillText(line1, 0, off + 21);
+    ctx.font = '500 14px -apple-system,system-ui,sans-serif'; ctx.fillText(line2, 0, off + 40);
+  });
+  const ly = s.y + Math.cos(roll) * (off + bh / 2), lx = s.x - Math.sin(roll) * (off + bh / 2);
+  markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: 34, box: [lx - bw / 2, ly - bh / 2, bw, bh], lc: [lx, ly], lr: Math.max(bw, bh) / 2 });
+}
 function drawAircraft(B, T, here, now) {
   markers = [];
   const sun = O.sunPos(here.lat, here.lon, new Date(now));
   const light = sun.alt > 0 ? fromAzEl(sun.az, sun.alt) : unit([0.3, 0.2, 1]);
   const list = O.all.filter(a => a.lat != null && a.alt != null && O.distMi(here.lat, here.lon, a.lat, a.lon) <= SKY_RANGE_MI);
+  // A flight the user is tracking is always shown, however far away; beyond the horizon it sits on the horizon line.
+  const tr = O.tracked, trHex = tr && tr.lat != null ? tr.hex : null;
+  if (trHex && !list.some(a => a.hex === trHex)) list.push({ ...tr, alt: tr.alt ?? 0 });
   const items = list.map(a => {
-    const p = extrapolate(a, now), sp = skyPoint(here, p);
-    return { a, p, sp, v: fromAzEl(sp.az, sp.el) };
+    const isTr = a.hex === trHex;
+    const p = extrapolate(a, now, isTr && !O.all.some(x => x.hex === trHex) ? O.trackUpdated : 0), sp = skyPoint(here, p);
+    const far = isTr && sp.dM > SKY_RANGE_MI * 1609.344;
+    return { a, p, sp, isTr, far, v: fromAzEl(sp.az, far ? Math.max(sp.el, 0.6) : sp.el) };
   }).sort((x, y) => y.sp.range - x.sp.range);           // far first, near on top
   const edge = [];
   for (const it of items) {
     const s = project(it.v, B);
     if (!onScreen(s, 10)) { edge.push({ it, s }); continue; }
+    if (it.far) { drawTrackedFar(it, s, T); continue; }
+    if (it.isTr) { ctx.strokeStyle = GOLD; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(72, Math.min(170, 6400 / Math.sqrt(it.sp.range))) * 0.62, 0, 7); ctx.stroke(); }
     const kind = classOf(it.a);
     const size = Math.max(72, Math.min(170, 6400 / Math.sqrt(it.sp.range))) * CLASSES[kind].scale;
     // Subtle halo: green closing, amber at its closest, red moving away.
@@ -454,7 +484,7 @@ function drawAircraft(B, T, here, now) {
     markers.push({ hex: it.a.hex, x: s.x, y: s.y, r: size * 0.6, box: [bx, by, bw, bh], lc: [lx + shift, ly], lr: Math.max(bw, bh) / 2 });
   }
   // Off-screen aircraft: arrows on the edge pointing the way to turn.
-  edge.sort((x, y) => x.it.sp.range - y.it.sp.range);
+  edge.sort((x, y) => (y.it.isTr - x.it.isTr) || (x.it.sp.range - y.it.sp.range));   // tracked flight first
   const placed = [];
   edgeHits = [];
   for (const { it, s } of edge.slice(0, 5)) {
@@ -488,12 +518,12 @@ function drawAircraft(B, T, here, now) {
     placed.push({ x: ex2, y: ey });
     edgeHits.push({ hex: it.a.hex, x: ex2, y: ey, r: 30 });
     ctx.save(); ctx.translate(ex2, ey); ctx.rotate(ang);
-    ctx.fillStyle = T.pill; ctx.beginPath(); ctx.arc(0, 0, 20, 0, 7); ctx.fill();
-    ctx.fillStyle = T.pillInk; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-5, -8.5); ctx.lineTo(-5, 8.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = it.isTr ? GOLD : T.pill; ctx.beginPath(); ctx.arc(0, 0, it.isTr ? 24 : 20, 0, 7); ctx.fill();
+    ctx.fillStyle = it.isTr ? GOLD_INK : T.pillInk; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-5, -8.5); ctx.lineTo(-5, 8.5); ctx.closePath(); ctx.fill();
     ctx.restore();
-    const txt = `${O.flightLabel(it.a)} · ${fmtRange(it.sp.range)}`;
+    const txt = `${it.isTr ? '★ ' : ''}${O.flightLabel(it.a)} · ${fmtRange(it.sp.range)}`;
     const [lx2, ly2] = lblAt(ex2, ey);
-    label(lx2, ly2, 0, txt, T, true);
+    label(lx2, ly2, 0, txt, it.isTr ? { ...T, pill: GOLD, pillInk: GOLD_INK } : T, true);
     edgeHits.push({ hex: it.a.hex, x: lx2, y: ly2, r: rollQ % 2 ? 26 : 60, rx: rollQ % 2 ? 18 : 80, ry: rollQ % 2 ? 80 : 18 });
   }
 }

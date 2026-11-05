@@ -204,6 +204,15 @@ body.ar-open{overflow:hidden}
 .links a{color:#fff;text-decoration:none;font-size:.9rem;font-weight:600;background:rgba(255,255,255,.1);padding:8px 14px;border-radius:999px}
 .fine{font-size:.75rem;color:var(--ink-3);margin:0}
 
+/* track a flight */
+.trackcard{border-color:rgba(255,207,74,.65);box-shadow:0 0 0 1px rgba(255,207,74,.25),0 18px 40px rgba(5,10,30,.22)}
+.trackcard .tk{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.trackcard .tk b{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ffcf4a}
+.trackcard .tk button{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:4px 10px;font-size:.78rem;font-weight:600}
+.trackcard .tline{font-size:.95rem;line-height:1.35}
+.trackcard .tline + .tline{margin-top:-8px;color:var(--ink-2,rgba(255,255,255,.8))}
+.trackcard.waiting{cursor:default}
+.trackcard.waiting h2{margin:0;font-size:1.35rem}
 /* settings */
 dialog{border:1px solid rgba(255,255,255,.14);border-radius:18px;background:var(--sheet);color:var(--ink);padding:0;width:min(480px, calc(100vw - 32px));max-height:88vh}
 dialog::backdrop{background:rgba(3,8,20,.55)}
@@ -250,7 +259,7 @@ body.kiosk .gear{opacity:.2}
 <div class="app">
   <header class="top">
     <div class="loc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span id="where">Spot-Air</span></div>
-    <div class="topbtns"><button class="skybtn" id="skyBtn" type="button" aria-label="Point at the sky"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M17 10.5v-1l-4-2.5V4.8a.8.8 0 0 0-1.6 0V7L7.4 9.5v1l4-1.2v2.6l-1 .8V13l1.8-.5L14 13v-.8l-1-.8V9.3z" fill="currentColor" stroke="none" transform="translate(-.2 3.2)"/></svg><span>Sky</span></button>
+    <div class="topbtns"><button class="skybtn" id="trackBtn" type="button" aria-label="Track a flight"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span>Track</span></button><button class="skybtn" id="skyBtn" type="button" aria-label="Point at the sky"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M17 10.5v-1l-4-2.5V4.8a.8.8 0 0 0-1.6 0V7L7.4 9.5v1l4-1.2v2.6l-1 .8V13l1.8-.5L14 13v-.8l-1-.8V9.3z" fill="currentColor" stroke="none" transform="translate(-.2 3.2)"/></svg><span>Sky</span></button>
     <button class="gear" id="settingsBtn" aria-label="Settings" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
   </header>
   <nav class="tabs" id="tabs" role="tablist" aria-label="Aircraft in range" hidden></nav>
@@ -329,6 +338,18 @@ body.kiosk .gear{opacity:.2}
       </div>
     </details>
     <div class="actions"><button type="button" class="btn" id="s-cancel">Cancel</button><button type="submit" class="btn primary">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="trackDlg">
+  <form method="dialog" id="trackForm" novalidate>
+    <h2>Track a flight</h2>
+    <div class="field">
+      <label for="t-q">Flight number, callsign or tail number</label>
+      <input type="text" id="t-q" autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="e.g. UA1234, SKW5432 or N12345" enterkeyhint="search">
+      <span class="note">Spot-Air finds it anywhere it's flying and points the way, even when it's beyond the horizon. Regional flights often fly under the operator's code (a United Express flight may be SkyWest, SKW…); if a flight number isn't found, try its tail number.</span>
+    </div>
+    <div class="actions"><button type="button" class="btn" id="t-stop" hidden>Stop tracking</button><button type="button" class="btn" id="t-cancel">Cancel</button><button type="submit" class="btn primary">Track</button></div>
   </form>
 </dialog>
 

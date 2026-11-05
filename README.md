@@ -53,11 +53,17 @@ Tap **Sky** (top right) and point your phone at the sky. The camera view shows e
 - **Compass accuracy** on phones is about ±5–15°. If markers sit a little to the side of the real plane, **drag sideways** to line them up; **double-tap** resets. If the app says the compass needs calibrating, wave the phone in a figure 8.
 - The first time, iPhone asks to allow **Motion & Orientation** and the **camera**. Without the camera it still works over a painted sky.
 
+## Track a flight
+
+Tap **Track** and type a flight number (UA1234), a callsign (SKW5432) or a tail number (N12345). Spot-Air finds the flight anywhere on the network and pins a gold card at the top: where it is from you, altitude and speed, about how long until it reaches its destination (when the route is known), and when it will pass closest to you. In the sky view it's always shown in gold: on the horizon in its real direction when it's far away, or as a gold edge arrow showing which way to turn. Tracking lasts until you tap **Stop** (or 18 hours).
+
+Regional flights often fly under the operator's code (a United Express flight may broadcast as SkyWest, SKW…). If a flight number isn't found, try the tail number.
+
 ## Settings
 
 | Setting | Notes |
 |---|---|
-| Data source | **Automatic** tries airplanes.live, then adsb.lol, then adsb.fi. Pick one to pin it, or **My receiver** for a local readsb/tar1090. |
+| Data source | **Automatic** tries adsb.lol, then adsb.fi, then airplanes.live. Pick one to pin it, **FlyItalyADSB** (commercial use allowed; needs its free key on the relay, `FLYITALY_KEY`), or **My receiver** for a local readsb/tar1090. |
 | Radius | 1–25 miles (default 5). |
 | Refresh | 5–60 seconds (default 10). The free APIs allow about 1 request per second per user, so anything 5 s or slower is polite. |
 | Location | Follow your phone, or a fixed point (patio, receiver site). |

@@ -372,7 +372,140 @@ async function poll(now) {
   render();
   pollTimer = setTimeout(poll, cfg.refreshSec * 1000);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(true); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(true); pollTrack(true); } });
+
+/* ---------- track one flight anywhere (e.g. someone's incoming flight) ---------- */
+// Airline flight numbers (IATA, 2 letters) → the radio callsign prefix aircraft broadcast (ICAO, 3 letters).
+const IATA_ICAO = {
+  AA:'AAL', UA:'UAL', DL:'DAL', WN:'SWA', B6:'JBU', AS:'ASA', NK:'NKS', F9:'FFT', G4:'AAY', HA:'HAL', SY:'SCX', MX:'MXY',
+  QX:'QXE', OO:'SKW', YX:'RPA', '9E':'EDV', MQ:'ENY', OH:'JIA', YV:'ASH', ZW:'AWI', PT:'PDT', C5:'UCA', G7:'GJS', KS:'PEN',
+  AC:'ACA', WS:'WJA', PD:'POE', AM:'AMX', Y4:'VOI', VB:'VIV', CM:'CMP', AV:'AVA', LA:'LAN', JJ:'TAM', AR:'ARG', G3:'GLO', AD:'AZU',
+  BA:'BAW', VS:'VIR', LH:'DLH', AF:'AFR', KL:'KLM', IB:'IBE', LX:'SWR', OS:'AUA', SN:'BEL', SK:'SAS', AY:'FIN', EI:'EIN',
+  FR:'RYR', U2:'EZY', W6:'WZZ', TP:'TAP', AZ:'ITY', LO:'LOT', TK:'THY', EK:'UAE', QR:'QTR', EY:'ETD', SV:'SVA', LY:'ELY',
+  CX:'CPA', JL:'JAL', NH:'ANA', KE:'KAL', OZ:'AAR', SQ:'SIA', QF:'QFA', NZ:'ANZ', CA:'CCA', MU:'CES', CZ:'CSN', BR:'EVA',
+  CI:'CAL', PR:'PAL', TG:'THA', MH:'MAS', GA:'GIA', AI:'AIC', ET:'ETH', KQ:'KQA', SA:'SAA', MS:'MSR', '5X':'UPS', FX:'FDX',
+};
+const TRACK_KEY = 'spotair.track';
+const track = { q: '', set: 0, a: null, status: '', lastSeen: 0 };
+(function loadTrack() {
+  const t = store(TRACK_KEY);
+  if (t && t.q && Date.now() - t.set < 18 * 3600e3) { track.q = t.q; track.set = t.set; }
+})();
+function trackCandidates(q) {
+  const s = q.toUpperCase().replace(/[\s.]/g, '');
+  if (!s) return [];
+  const out = [];
+  if (/^[0-9A-F]{6}$/.test(s)) out.push(['hex', s.toLowerCase()]);
+  const iata = /^([A-Z]{2}|[A-Z]\d|\d[A-Z])(\d{1,4}[A-Z]?)$/.exec(s);
+  if (iata && IATA_ICAO[iata[1]]) out.push(['callsign', IATA_ICAO[iata[1]] + iata[2].replace(/^0+(?=\d)/, '')]);
+  if (/^[A-Z]{3}\d{1,4}[A-Z]{0,2}$/.test(s)) out.push(['callsign', s.replace(/^([A-Z]{3})0+(?=\d)/, '$1')]);
+  if (/^(N\d[0-9A-Z]{0,4}|[A-Z]{1,2}-[0-9A-Z]{2,5}|[A-Z]{2}[0-9A-Z]{3,4})$/.test(s)) out.push(['reg', s]);
+  if (!out.length) out.push(['callsign', s]);
+  return out;
+}
+const TRACK_URLS = {
+  callsign: v => [`https://api.adsb.lol/v2/callsign/${v}`, `https://opendata.adsb.fi/api/v2/callsign/${v}`],
+  reg:      v => [`https://api.adsb.lol/v2/reg/${v}`, `https://opendata.adsb.fi/api/v2/registration/${v}`],
+  hex:      v => [`https://api.adsb.lol/v2/hex/${v}`, `https://opendata.adsb.fi/api/v2/hex/${v}`],
+};
+async function findTracked() {
+  for (const [kind, v] of trackCandidates(track.q)) {
+    for (const url of TRACK_URLS[kind](encodeURIComponent(v))) {
+      try {
+        const found = normalize(await fetchJSON(viaRelay(url)));
+        if (found.length) return found.sort((x, y) => (x.ground - y.ground) || (x.seenPos - y.seenPos))[0];
+        break;                                   // this network answered "not flying": try the next spelling
+      } catch { /* network didn't answer: try the other one */ }
+    }
+  }
+  return null;
+}
+let trackTimer;
+async function pollTrack(now) {
+  clearTimeout(trackTimer);
+  if (!track.q || cfg.demo) return;
+  if (document.hidden && !cfg.kiosk && !now) return;
+  if (!cfg.relay) { track.status = 'needs the relay'; render(); return; }
+  try {
+    const a = await findTracked();
+    if (a) {
+      if (here) { a.dist = distMi(here.lat, here.lon, a.lat, a.lon); a.brg = bearing(here.lat, here.lon, a.lat, a.lon); }
+      a.tracked = true; track.a = a; track.lastSeen = Date.now(); track.status = '';
+      enrichTop([a]);
+    } else {
+      track.a = track.a && Date.now() - track.lastSeen < 120e3 ? track.a : null;   // keep the last fix briefly
+      track.status = track.a ? '' : 'not found';
+    }
+  } catch { track.status = 'lookup failed'; }
+  render();
+  trackTimer = setTimeout(pollTrack, (track.a ? 15 : 45) * 1000);
+}
+function startTrack(q) {
+  track.q = q.trim(); track.set = Date.now(); track.a = null; track.status = 'searching'; track.lastSeen = 0;
+  store(TRACK_KEY, { q: track.q, set: track.set });
+  render(); pollTrack(true);
+}
+function stopTrack() {
+  clearTimeout(trackTimer);
+  track.q = ''; track.a = null; track.status = ''; store(TRACK_KEY, {});
+  render();
+}
+// Where it's going and when, in plain words.
+function trackNotes(a) {
+  const out = [];
+  const r = routeOf(a), mph = a.gs != null ? a.gs * 1.15078 : 0;
+  if (a.ground) out.push('On the ground');
+  else if (r && r.to && r.to.lat != null && routePlausible(r, a) !== false && mph > 60) {
+    const d = distMi(a.lat, a.lon, r.to.lat, r.to.lon);
+    const min = Math.round(d / mph * 60 + (d > 60 ? 8 : 3));                      // a few minutes for the approach
+    out.push(d < 4 ? `Landing at ${r.to.code}` : `About ${min < 90 ? min + ' min' : Math.floor(min / 60) + ' h ' + (min % 60) + ' min'} to ${r.to.code}${r.from ? ` · from ${r.from.code}` : ''}`);
+  }
+  if (here && a.track != null && mph > 60 && !a.ground) {
+    // Closest point to you along its current heading.
+    const diff = rad(((a.track - bearing(a.lat, a.lon, here.lat, here.lon)) + 540) % 360 - 180);
+    const along = a.dist * Math.cos(diff), off = Math.abs(a.dist * Math.sin(diff));
+    if (along > 1 && off < 25) out.push(`On its heading it passes ${off < 1 ? 'almost overhead' : `within ${fmtDist(off)}`} in about ${Math.max(1, Math.round(along / mph * 60))} min`);
+    else if (along <= 1 && a.dist > 3) out.push('Heading away from you');
+  }
+  return out;
+}
+function trackHTML() {
+  if (!track.q) return '';
+  const a = track.a;
+  const stop = '<button type="button" data-act="untrack">Stop</button>';
+  if (!a) {
+    const msg = track.status === 'searching' ? 'Searching the network…'
+      : track.status === 'needs the relay' ? 'Tracking needs the relay.'
+      : track.status === 'lookup failed' ? 'Couldn’t reach the flight networks. Retrying.'
+      : 'Not in the air yet, or outside receiver coverage (over oceans, for example). Checking again every minute.';
+    return `<article class="card trackcard waiting"><div class="tk"><b>Tracking</b>${stop}</div><h2>${esc(track.q.toUpperCase())}</h2><p class="tline">${esc(msg)}</p></article>`;
+  }
+  const where = a.dist != null ? `${fmtDist(a.dist)} ${cardinal(a.brg)} of you` : '';
+  const lines = [[where, a.ground ? '' : fmtAlt(a), a.gs != null ? fmtSpd(a.gs) : ''].filter(Boolean).join(' · '), ...trackNotes(a)];
+  return `<article class="card trackcard" data-open="${a.hex}" tabindex="0" aria-label="Tracked flight ${esc(flightLabel(a))}, tap for details">
+    <div class="tk"><b>Tracking</b>${stop}</div>
+    <header class="head"><div class="logo">${logoHTML(a)}</div><div class="ident"><h2 class="fno">${esc(flightLabel(a))}</h2>${airlineName(a) ? `<div class="airline">${esc(airlineName(a))}</div>` : ''}</div>
+      <div class="where"><b>${a.dist != null ? fmtDist(a.dist) : '—'}</b><span>${a.brg != null ? ARROW(a.brg) + cardinal(a.brg) : ''}</span></div></header>
+    ${lines.map(l => `<p class="tline">${esc(l)}</p>`).join('')}
+    ${progressHTML(a)}
+  </article>`;
+}
+function initTrackUI() {
+  const trackDlg = $('trackDlg');
+  $('trackBtn').addEventListener('click', () => {
+    $('t-q').value = track.q; $('t-stop').hidden = !track.q;
+    if (trackDlg.showModal) trackDlg.showModal(); else trackDlg.setAttribute('open', '');
+    setTimeout(() => $('t-q').focus(), 50);
+  });
+  $('t-cancel').addEventListener('click', () => trackDlg.close());
+  $('t-stop').addEventListener('click', () => { trackDlg.close(); stopTrack(); });
+  $('trackForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const q = $('t-q').value.trim();
+    trackDlg.close();
+    if (q) startTrack(q); else stopTrack();
+  });
+}
 
 
 /* ---------- airports: infer departures and arrivals ---------- */
@@ -741,10 +874,12 @@ function render() {
   $('tabs').innerHTML = cfg.kiosk ? tabsHTML() : '';
   $('tabs').hidden = !cfg.kiosk || state.list.length < 2;
   $('tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  $('stage').innerHTML = !state.list.length ? emptyHTML() : cfg.kiosk ? cardHTML(a) : state.list.map(cardHTML).join('');
+  if (track.a && here) { track.a.dist = distMi(here.lat, here.lon, track.a.lat, track.a.lon); track.a.brg = bearing(here.lat, here.lon, track.a.lat, track.a.lon); }
+  const pinned = cfg.kiosk ? '' : trackHTML();
+  $('stage').innerHTML = pinned + (!state.list.length ? emptyHTML() : cfg.kiosk ? cardHTML(a) : state.list.map(cardHTML).join(''));
   $('where').textContent = here ? `Within ${fmtDist(cfg.radiusMi).replace('.0 ', ' ')} of ${here.fixed ? 'your spot' : 'you'}` : 'Spot-Air';
   statusLine();
-  if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen) || (state.all || []).find(x => x.hex === sheetOpen); if (d) $('sheetInner').innerHTML = detailHTML(d); }
+  if (sheetOpen) { const d = state.list.find(x => x.hex === sheetOpen) || (state.all || []).find(x => x.hex === sheetOpen) || (track.a?.hex === sheetOpen ? track.a : null); if (d) $('sheetInner').innerHTML = detailHTML(d); }
 }
 function statusLine() {
   const el = $('status'); let txt = '', cls = '';
@@ -760,7 +895,7 @@ function statusLine() {
 /* ---------- interaction (read-only: pick a tab, open details) ---------- */
 let sheetOpen = null;
 function openDetail(hex) {
-  const a = state.list.find(x => x.hex === hex) || (state.all || []).find(x => x.hex === hex); if (!a) return;
+  const a = state.list.find(x => x.hex === hex) || (state.all || []).find(x => x.hex === hex) || (track.a?.hex === hex ? track.a : null); if (!a) return;
   sheetOpen = hex;
   if (!cfg.demo) want('photo', a.hex, () => lookupPhoto({ ...a, reg: a.reg || enrich.ac.get(a.hex)?.reg }));
   $('sheetInner').innerHTML = detailHTML(a);
@@ -776,6 +911,7 @@ document.addEventListener('click', ev => {
   if (tab) { state.selected = tab.dataset.tab; userPicked = Date.now(); render(); return; }
   const act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'close') return closeDetail();
+  if (act === 'untrack') return stopTrack();
   if (act === 'settings') return openSettings();
   if (act === 'retry') return poll(true);
   if (act === 'retryLoc') { startLocation(); render(); return; }
@@ -854,6 +990,7 @@ window.overheadDebug = () => ({ list: state.list.map(a => ({ cs: a.callsign, hex
 window.Overhead = {
   get here() { return here; }, get list() { return state.list; }, get all() { return state.all || state.list; },
   get updated() { return state.updated; }, get metric() { return metric(); }, get kiosk() { return !!cfg.kiosk; },
+  get tracked() { return track.a; }, get trackUpdated() { return track.lastSeen; },
   setSkyRange(mi) { skyRangeMi = mi; poll(true); },
   distMi, bearing, sunPos, moonPos, skyPhase, flightLabel, typeName, openDetail, routeOf,
 };
@@ -864,6 +1001,8 @@ if ('serviceWorker' in navigator && window.isSecureContext && location.protocol 
 }
 startLocation();
 if (cfg.kiosk) wake();
+initTrackUI();
 render();
 poll(true);
+pollTrack(true);
 })();
