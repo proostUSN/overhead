@@ -2,10 +2,10 @@
 
 A flight tracker for your phone: every aircraft within a few miles of you, with its route, type, altitude, speed, direction and a photo. It uses free, community-run ADS-B networks, so there are no accounts or API keys. The same app runs on a Raspberry Pi patio display, and can read straight from your own ADS-B receiver.
 
-**Open it:** https://spotair.roosfamily.com (the old address, https://proostusn.github.io/overhead/, redirects there)
+**Open it:** https://spot-air.com (older links, spotair.roosfamily.com and proostusn.github.io/overhead, forward there)
 
 ### Custom domain
-The app is served by GitHub Pages at `spotair.roosfamily.com`: a DNS CNAME record `spotair` → `proostusn.github.io`, and the domain set in the repo under Settings → Pages → Custom domain, with Enforce HTTPS on. The relay only answers pages it knows, so the domain is also listed in `ALLOWED_ORIGINS` in `nas/docker-compose.yml`.
+The app is served by GitHub Pages at `spot-air.com` (registered at Squarespace). DNS: four A records for `@` → 185.199.108.153, .109.153, .110.153, .111.153; `www` CNAME → `proostusn.github.io`; and the TXT record `_github-pages-challenge-proostUSN` that verifies the domain in the GitHub account (so no one else can claim it). The domain is set in the repo under Settings → Pages → Custom domain, with Enforce HTTPS on. The old address `spotair.roosfamily.com` is a 301 forward at GoDaddy. The relay only answers pages it knows, so these addresses are listed in `ALLOWED_ORIGINS` in `nas/docker-compose.yml`.
 
 ## How live data reaches the app
 

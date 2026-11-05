@@ -8,7 +8,7 @@ LON="-95.0000"       # your patio longitude
 RADIUS="5"           # miles
 # Where the app is served from. Default: the public GitHub Pages copy.
 # With your own receiver + the app copied to the Pi, use: http://localhost/overhead/  (default: the public site)
-APP_URL="https://spotair.roosfamily.com/"
+APP_URL="https://spot-air.com/"
 # Leave empty to use the free online networks. With your own receiver, set e.g. /tar1090/data/aircraft.json
 RECEIVER_JSON=""
 
